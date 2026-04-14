@@ -12,8 +12,8 @@
         "changelog": "Fixes plugin not appearing in Jellyfin catalog after adding the repository. Empty imageUrl field in the manifest was causing silent rejection. Also fixes meta.json inside the installed zip to match the tag version.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/Atvriders/jellyfin-plugin-diagnostics/releases/download/v1.0.2/jellyfin-plugin-diagnostics_1.0.2.zip",
-        "checksum": "8743cc1fb86494e32b5b290753ad0d14",
-        "timestamp": "2026-04-14T19:50:44Z"
+        "checksum": "562db16584d23c8b9592131f52a347c7",
+        "timestamp": "2026-04-14T19:51:11Z"
       },
       {
         "version": "1.0.1.0",
