@@ -7,6 +7,15 @@
     "owner": "Atvriders",
     "category": "General",
     "imageUrl": "",
-    "versions": []
+    "versions": [
+      {
+        "version": "1.0.0.0",
+        "changelog": "See release notes",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "",
+        "checksum": "94383c654182d7426ca09444ea10276b",
+        "timestamp": "2026-04-14T19:31:31Z"
+      }
+    ]
   }
 ]
