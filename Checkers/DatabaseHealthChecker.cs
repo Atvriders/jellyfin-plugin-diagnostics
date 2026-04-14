@@ -1,8 +1,7 @@
-using System.Data.Common;
+using System.Diagnostics;
 using JellyfinDiagnostics.Models;
 using JellyfinDiagnostics.Services;
 using MediaBrowser.Common.Configuration;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 
 namespace JellyfinDiagnostics.Checkers;
@@ -49,7 +48,6 @@ public class DatabaseHealthChecker : IDiagnosticChecker
             CheckDatabaseSize(results, name, path);
             CheckWalFile(results, name, path);
             CheckDatabaseIntegrity(results, name, path, cancellationToken);
-            CheckJournalMode(results, name, path);
         }
 
         CheckDatabaseOnNetworkShare(results, dataPath);
@@ -182,27 +180,43 @@ public class DatabaseHealthChecker : IDiagnosticChecker
 
     private void CheckDatabaseIntegrity(List<DiagnosticResult> results, string name, string dbPath, CancellationToken cancellationToken)
     {
+        // Uses the sqlite3 CLI if it's available inside the Jellyfin container.
+        // Avoids a hard dependency on Microsoft.Data.Sqlite which isn't always
+        // accessible to plugin assemblies at runtime.
+        var sqliteBinary = FindSqliteBinary();
+        if (sqliteBinary == null)
+        {
+            return;
+        }
+
         try
         {
-            var connString = "Data Source=" + dbPath + ";Mode=ReadOnly;Cache=Shared";
-            using var conn = new SqliteConnection(connString);
-            conn.Open();
-
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "PRAGMA quick_check;";
-            using var reader = cmd.ExecuteReader();
-
-            var issues = new List<string>();
-            while (reader.Read())
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo
             {
-                var row = reader.GetString(0);
-                if (!row.Equals("ok", StringComparison.OrdinalIgnoreCase))
-                {
-                    issues.Add(row);
-                }
+                FileName = sqliteBinary,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            process.StartInfo.ArgumentList.Add(dbPath);
+            process.StartInfo.ArgumentList.Add("PRAGMA quick_check;");
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEnd();
+            if (!process.WaitForExit(10000))
+            {
+                try { process.Kill(true); } catch { }
+                return;
             }
 
-            if (issues.Count == 0)
+            if (process.ExitCode != 0)
+            {
+                return;
+            }
+
+            var trimmed = stdout.Trim();
+            if (trimmed.Equals("ok", StringComparison.OrdinalIgnoreCase))
             {
                 results.Add(new DiagnosticResult
                 {
@@ -210,20 +224,21 @@ public class DatabaseHealthChecker : IDiagnosticChecker
                     Status = DiagnosticStatus.Working,
                     Category = Category,
                     Title = name + " integrity check: OK",
-                    Detail = "SQLite PRAGMA quick_check passed for " + name + ".",
+                    Detail = "sqlite3 PRAGMA quick_check passed for " + name + ".",
                     UnraidContext = string.Empty,
                     FixSteps = new List<string>()
                 });
             }
             else
             {
+                var firstLine = trimmed.Split('\n')[0];
                 results.Add(new DiagnosticResult
                 {
                     Severity = DiagnosticSeverity.Critical,
                     Status = DiagnosticStatus.Broken,
                     Category = Category,
                     Title = name + " integrity check FAILED",
-                    Detail = "SQLite quick_check returned " + issues.Count + " issue(s). Database corruption is likely. First issue: " + issues[0],
+                    Detail = "sqlite3 quick_check reported issues. First line: " + firstLine,
                     UnraidContext = "Database corruption on Unraid Docker is almost always caused by: (1) storing the DB on a network share, (2) hard shutdowns/power loss while writes are pending, (3) running out of disk space on the cache drive.",
                     FixSteps = new List<string>
                     {
@@ -237,63 +252,48 @@ public class DatabaseHealthChecker : IDiagnosticChecker
                 });
             }
         }
-        catch (DbException ex)
-        {
-            results.Add(new DiagnosticResult
-            {
-                Severity = DiagnosticSeverity.Warning,
-                Status = DiagnosticStatus.Unknown,
-                Category = Category,
-                Title = name + " integrity check could not run",
-                Detail = "Failed to open database for integrity check: " + ex.Message,
-                UnraidContext = "If this happens while Jellyfin is running, SQLite may be holding an exclusive lock. Ideally this check runs against a live DB, but some lock modes prevent it.",
-                FixSteps = new List<string>
-                {
-                    "Retry the scan later",
-                    "If persistent, inspect the database manually with sqlite3 " + Path.GetFileName(dbPath)
-                }
-            });
-        }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Integrity check failed for {Name}", name);
         }
     }
 
-    private void CheckJournalMode(List<DiagnosticResult> results, string name, string dbPath)
+    private static string? FindSqliteBinary()
     {
+        foreach (var candidate in new[] { "/usr/bin/sqlite3", "/usr/local/bin/sqlite3" })
+        {
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        // Try PATH lookup via which
         try
         {
-            var connString = "Data Source=" + dbPath + ";Mode=ReadOnly;Cache=Shared";
-            using var conn = new SqliteConnection(connString);
-            conn.Open();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "PRAGMA journal_mode;";
-            var mode = cmd.ExecuteScalar() as string ?? "unknown";
-
-            if (!mode.Equals("wal", StringComparison.OrdinalIgnoreCase))
+            using var p = new Process();
+            p.StartInfo = new ProcessStartInfo
             {
-                results.Add(new DiagnosticResult
-                {
-                    Severity = DiagnosticSeverity.Warning,
-                    Status = DiagnosticStatus.Degraded,
-                    Category = Category,
-                    Title = name + " journal mode is " + mode + " (not WAL)",
-                    Detail = "Jellyfin expects SQLite WAL journal mode for concurrent read/write. " + mode + " may cause write contention.",
-                    UnraidContext = "Jellyfin sets WAL mode at startup. If it's not WAL, the filesystem may not support it (e.g., the DB is on a network share).",
-                    FixSteps = new List<string>
-                    {
-                        "Verify the database resides on a local filesystem (Unraid cache pool)",
-                        "Restart Jellyfin so it re-enables WAL",
-                        "If WAL still doesn't stick, the underlying storage does not support it"
-                    }
-                });
+                FileName = "which",
+                Arguments = "sqlite3",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            p.Start();
+            var output = p.StandardOutput.ReadToEnd().Trim();
+            if (p.WaitForExit(2000) && p.ExitCode == 0 && !string.IsNullOrEmpty(output) && File.Exists(output))
+            {
+                return output;
             }
         }
         catch
         {
-            // Best-effort
+            // sqlite3 not available
         }
+
+        return null;
     }
 
     private void CheckDatabaseOnNetworkShare(List<DiagnosticResult> results, string dataPath)
