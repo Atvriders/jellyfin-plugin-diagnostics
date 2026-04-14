@@ -33,11 +33,63 @@ public class SecurityChecker : IDiagnosticChecker
     {
         var results = new List<DiagnosticResult>();
 
+        var adminCountBefore = results.Count;
+        int totalUsers = CountUsers();
+        int adminUsers = CountAdmins();
         CheckDefaultAdmin(results);
         CheckRemoteAccessSafety(results);
         CheckUpnpEnabled(results);
 
+        // Always emit a baseline posture summary so the Security category is visible
+        // even when every sub-check is happy.
+        results.Insert(0, new DiagnosticResult
+        {
+            Severity = DiagnosticSeverity.Info,
+            Status = DiagnosticStatus.Working,
+            Category = Category,
+            Title = "Security posture: " + totalUsers + " user(s), " + adminUsers + " admin(s)",
+            Detail = "Baseline: checked admin usernames, remote access / HTTPS combo, and UPnP port mapping.",
+            UnraidContext = string.Empty,
+            FixSteps = new List<string>()
+        });
+
         return Task.FromResult(results);
+    }
+
+    private int CountUsers()
+    {
+        try
+        {
+            return _userManager.Users?.Count() ?? 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private int CountAdmins()
+    {
+        try
+        {
+            int n = 0;
+            var users = _userManager.Users;
+            if (users != null)
+            {
+                foreach (var u in users)
+                {
+                    if (IsUserAdmin(u))
+                    {
+                        n++;
+                    }
+                }
+            }
+            return n;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     private void CheckDefaultAdmin(List<DiagnosticResult> results)
