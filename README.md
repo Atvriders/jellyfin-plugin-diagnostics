@@ -2,7 +2,7 @@
 
 A server-side Jellyfin admin plugin that detects common Docker/Unraid configuration issues in Jellyfin 10.11.6 and presents findings in an admin dashboard. Optionally forwards a **sanitized** report to any OpenAI-compatible AI endpoint for human-readable analysis.
 
-**Targets:** Jellyfin 10.11.6 · .NET 8.0 · Docker on Unraid
+**Targets:** Jellyfin 10.11.x · .NET 9.0 · Docker on Unraid
 
 ---
 
@@ -73,7 +73,7 @@ Updates through this path happen in one click as new versions are published to t
 
 ### Option C — Build from source
 
-You need the **.NET 8.0 SDK** installed (on the build machine, not on Unraid):
+You need the **.NET 9.0 SDK** installed (on the build machine, not on Unraid):
 
 ```bash
 git clone https://github.com/Atvriders/jellyfin-plugin-diagnostics.git
@@ -82,7 +82,7 @@ dotnet restore
 dotnet build -c Release
 ```
 
-The output DLL will be at `bin/Release/net8.0/JellyfinDiagnostics.dll`. Then follow steps 2–7 of Option B.
+The output DLL will be at `bin/Release/net9.0/JellyfinDiagnostics.dll`. Then follow steps 2–7 of Option B.
 
 ### Verifying the install
 
@@ -189,7 +189,7 @@ The plugin currently sends `"model": "default"` in the request. Most endpoints w
 dotnet build -c Release
 ```
 
-Output: `bin/Release/net8.0/JellyfinDiagnostics.dll`
+Output: `bin/Release/net9.0/JellyfinDiagnostics.dll`
 
 The `.csproj` references `Jellyfin.Controller` and `Jellyfin.Model` at version `10.11.*` from NuGet. NuGet resolves these automatically on first `dotnet restore`.
 

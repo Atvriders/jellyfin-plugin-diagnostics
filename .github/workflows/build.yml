@@ -18,7 +18,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '9.0.x'
 
       - name: Restore
         run: dotnet restore
@@ -30,7 +30,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: JellyfinDiagnostics
-          path: bin/Release/net8.0/JellyfinDiagnostics.dll
+          path: bin/Release/net9.0/JellyfinDiagnostics.dll
 
   release:
     needs: build
@@ -47,7 +47,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '9.0.x'
 
       - name: Build Release DLL
         run: |
@@ -59,7 +59,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p release
-          cp bin/Release/net8.0/JellyfinDiagnostics.dll release/
+          cp bin/Release/net9.0/JellyfinDiagnostics.dll release/
           cp meta.json release/
           cd release
           zip -r "jellyfin-plugin-diagnostics_${VERSION}.zip" JellyfinDiagnostics.dll meta.json
