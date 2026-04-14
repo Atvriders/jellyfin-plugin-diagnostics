@@ -29,8 +29,7 @@ public class AiIntegrationService
             Results = new List<DiagnosticResult>()
         };
 
-        int pathCounter = 0;
-        var pathMap = new Dictionary<string, string>();
+        var ctx = new SanitizeContext();
 
         foreach (var result in report.Results)
         {
@@ -39,14 +38,20 @@ public class AiIntegrationService
                 Severity = result.Severity,
                 Status = result.Status,
                 Category = result.Category,
-                Title = SanitizeText(result.Title, ref pathCounter, pathMap),
-                Detail = SanitizeText(result.Detail, ref pathCounter, pathMap),
-                UnraidContext = SanitizeText(result.UnraidContext, ref pathCounter, pathMap),
-                FixSteps = result.FixSteps.Select(s => SanitizeText(s, ref pathCounter, pathMap)).ToList()
+                Title = SanitizeText(result.Title, ctx),
+                Detail = SanitizeText(result.Detail, ctx),
+                UnraidContext = SanitizeText(result.UnraidContext, ctx),
+                FixSteps = result.FixSteps.Select(s => SanitizeText(s, ctx)).ToList()
             });
         }
 
         return sanitized;
+    }
+
+    private sealed class SanitizeContext
+    {
+        public int PathCounter;
+        public Dictionary<string, string> PathMap { get; } = new();
     }
 
     public async Task<string> SendToAiAsync(
@@ -95,7 +100,7 @@ public class AiIntegrationService
         }
     }
 
-    private static string SanitizeText(string text, ref int pathCounter, Dictionary<string, string> pathMap)
+    private static string SanitizeText(string text, SanitizeContext ctx)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -113,11 +118,11 @@ public class AiIntegrationService
                 return path;
             }
 
-            if (!pathMap.TryGetValue(path, out var replacement))
+            if (!ctx.PathMap.TryGetValue(path, out var replacement))
             {
-                pathCounter++;
-                replacement = "[path_" + pathCounter + "]";
-                pathMap[path] = replacement;
+                ctx.PathCounter++;
+                replacement = "[path_" + ctx.PathCounter + "]";
+                ctx.PathMap[path] = replacement;
             }
 
             return replacement;
