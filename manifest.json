@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.0.3.0",
+        "changelog": "Fixes the Diagnostics menu entry rendering as a blank screen. The dashboard HTML was missing the required data-role=page wrapper that Jellyfins plugin page loader expects. Also switches to ApiClient.ajax for proper auth and base URL handling.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Atvriders/jellyfin-plugin-diagnostics/releases/download/v1.0.3/jellyfin-plugin-diagnostics_1.0.3.zip",
+        "checksum": "91852a85e74a147a2317b855014fc51f",
+        "timestamp": "2026-04-14T20:27:46Z"
+      },
+      {
         "version": "1.0.2.0",
         "changelog": "Fixes plugin not appearing in Jellyfin catalog after adding the repository. Empty imageUrl field in the manifest was causing silent rejection. Also fixes meta.json inside the installed zip to match the tag version.",
         "targetAbi": "10.11.0.0",
