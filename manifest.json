@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.0.4.0",
+        "changelog": "Database Health, Performance, Container Resources, Scheduled Tasks, Plugin Health, Security. 10 checkers total.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Atvriders/jellyfin-plugin-diagnostics/releases/download/v1.0.4/jellyfin-plugin-diagnostics_1.0.4.zip",
+        "checksum": "9bfc82d46723f4f48dc2ce0060a6e2a5",
+        "timestamp": "2026-04-14T22:10:14Z"
+      },
+      {
         "version": "1.0.3.0",
         "changelog": "Fixes the Diagnostics menu entry rendering as a blank screen. The dashboard HTML was missing the required data-role=page wrapper that Jellyfins plugin page loader expects. Also switches to ApiClient.ajax for proper auth and base URL handling.",
         "targetAbi": "10.11.0.0",
