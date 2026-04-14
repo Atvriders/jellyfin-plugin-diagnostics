@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using JellyfinDiagnostics.Checkers;
 using JellyfinDiagnostics.Models;
-using MediaBrowser.Common;
+using MediaBrowser.Controller;
 using Microsoft.Extensions.Logging;
 
 namespace JellyfinDiagnostics.Services;
@@ -9,14 +9,14 @@ namespace JellyfinDiagnostics.Services;
 public class DiagnosticsService
 {
     private readonly IEnumerable<IDiagnosticChecker> _checkers;
-    private readonly IApplicationHost _appHost;
+    private readonly IServerApplicationHost _appHost;
     private readonly ILogger<DiagnosticsService> _logger;
 
     private DiagnosticsReport? _lastReport;
 
     public DiagnosticsService(
         IEnumerable<IDiagnosticChecker> checkers,
-        IApplicationHost appHost,
+        IServerApplicationHost appHost,
         ILogger<DiagnosticsService> logger)
     {
         _checkers = checkers;

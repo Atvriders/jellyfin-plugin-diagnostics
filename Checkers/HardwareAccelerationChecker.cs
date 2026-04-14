@@ -1,14 +1,15 @@
 using System.Diagnostics;
 using JellyfinDiagnostics.Models;
 using JellyfinDiagnostics.Services;
-using MediaBrowser.Controller.Configuration;
+using MediaBrowser.Common.Configuration;
+using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace JellyfinDiagnostics.Checkers;
 
 public class HardwareAccelerationChecker : IDiagnosticChecker
 {
-    private readonly IServerConfigurationManager _configManager;
+    private readonly IConfigurationManager _configManager;
     private readonly LogAnalyzer _logAnalyzer;
     private readonly ILogger<HardwareAccelerationChecker> _logger;
 
@@ -16,7 +17,7 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
     public string Category => "Hardware Acceleration";
 
     public HardwareAccelerationChecker(
-        IServerConfigurationManager configManager,
+        IConfigurationManager configManager,
         LogAnalyzer logAnalyzer,
         ILogger<HardwareAccelerationChecker> logger)
     {
@@ -30,9 +31,9 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
         var results = new List<DiagnosticResult>();
 
         var encodingOptions = _configManager.GetEncodingOptions();
-        var hwAccelType = encodingOptions.HardwareAccelerationType ?? string.Empty;
+        var hwAccelType = encodingOptions.HardwareAccelerationType;
 
-        if (string.IsNullOrEmpty(hwAccelType) || hwAccelType.Equals("none", StringComparison.OrdinalIgnoreCase))
+        if (hwAccelType == HardwareAccelerationType.none)
         {
             results.Add(new DiagnosticResult
             {
@@ -41,11 +42,12 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
                 Category = Category,
                 Title = "Hardware acceleration is disabled",
                 Detail = "No hardware acceleration is configured. Transcoding will use CPU only.",
-                UnraidContext = "This is fine if you don't need transcoding or prefer CPU encoding. To enable GPU transcoding on Unraid, you need to pass through a GPU device to the Docker container.",
+                UnraidContext = "This is fine if you don't need transcoding. To enable GPU transcoding on Unraid, pass a GPU device through to the Docker container.",
                 FixSteps = new List<string>
                 {
                     "In Unraid Docker settings, edit the Jellyfin container",
-                    "Add a device mapping for your GPU (e.g., /dev/dri for Intel/AMD, or NVIDIA runtime)",
+                    "Intel/AMD: add device /dev/dri -> /dev/dri",
+                    "NVIDIA: install 'Nvidia-Driver' plugin, add '--runtime=nvidia' to Extra Parameters, set NVIDIA_VISIBLE_DEVICES=all",
                     "In Jellyfin Dashboard > Playback > Transcoding, select your acceleration type",
                     "Save and restart the container"
                 }
@@ -60,21 +62,25 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
             Category = Category,
             Title = "Hardware acceleration type: " + hwAccelType,
             Detail = "Jellyfin is configured to use " + hwAccelType + " for hardware-accelerated transcoding.",
-            UnraidContext = "Verify the corresponding GPU device is passed through to the Docker container in Unraid.",
+            UnraidContext = "Verify the corresponding GPU device is passed through to the Docker container.",
             FixSteps = new List<string>()
         });
 
-        if (hwAccelType.Equals("nvenc", StringComparison.OrdinalIgnoreCase))
+        switch (hwAccelType)
         {
-            await CheckNvidiaDevices(results, cancellationToken).ConfigureAwait(false);
-        }
-        else if (hwAccelType.Equals("vaapi", StringComparison.OrdinalIgnoreCase)
-                 || hwAccelType.Equals("qsv", StringComparison.OrdinalIgnoreCase))
-        {
-            CheckDriDevices(results, hwAccelType);
+            case HardwareAccelerationType.nvenc:
+                await CheckNvidiaDevices(results, cancellationToken).ConfigureAwait(false);
+                break;
+            case HardwareAccelerationType.vaapi:
+            case HardwareAccelerationType.qsv:
+                CheckDriDevices(results, hwAccelType);
+                break;
+            case HardwareAccelerationType.amf:
+                CheckDriDevices(results, hwAccelType);
+                break;
         }
 
-        await CheckFfmpegEncoders(results, hwAccelType, cancellationToken).ConfigureAwait(false);
+        await CheckFfmpegEncoders(results, hwAccelType, encodingOptions.EncoderAppPath, cancellationToken).ConfigureAwait(false);
         CheckTranscodeLogs(results);
 
         return results;
@@ -82,21 +88,11 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
 
     private async Task CheckNvidiaDevices(List<DiagnosticResult> results, CancellationToken cancellationToken)
     {
-        bool hasNvidiaDevices = false;
-        try
-        {
-            if (Directory.Exists("/dev"))
-            {
-                var nvidiaDevices = Directory.GetFiles("/dev", "nvidia*");
-                hasNvidiaDevices = nvidiaDevices.Length > 0;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to check /dev/nvidia* devices");
-        }
+        bool hasNvidiaCtl = File.Exists("/dev/nvidiactl");
+        bool hasNvidia0 = File.Exists("/dev/nvidia0");
+        bool hasNvidiaUvm = File.Exists("/dev/nvidia-uvm");
 
-        if (!hasNvidiaDevices)
+        if (!hasNvidiaCtl && !hasNvidia0)
         {
             results.Add(new DiagnosticResult
             {
@@ -104,30 +100,34 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
                 Status = DiagnosticStatus.Broken,
                 Category = Category,
                 Title = "NVIDIA device nodes not found",
-                Detail = "NVENC is configured but no /dev/nvidia* devices are visible inside the container.",
-                UnraidContext = "On Unraid, NVIDIA devices must be passed through to the Docker container. This requires the Nvidia-Driver plugin installed on Unraid and the container configured with --runtime=nvidia or explicit device mappings.",
+                Detail = "NVENC is configured but /dev/nvidiactl and /dev/nvidia0 are not visible inside the container.",
+                UnraidContext = "Unraid NVIDIA passthrough requires the Nvidia-Driver plugin and NVIDIA container runtime. Without these, the GPU is invisible inside Docker.",
                 FixSteps = new List<string>
                 {
-                    "Install the 'Nvidia-Driver' plugin from Unraid Community Applications",
-                    "In Unraid Docker settings, edit the Jellyfin container",
-                    "Add '--runtime=nvidia' to Extra Parameters",
+                    "Install 'Nvidia-Driver' plugin from Unraid Community Applications",
+                    "Reboot Unraid to load the driver",
+                    "Edit the Jellyfin container, add '--runtime=nvidia' to Extra Parameters",
                     "Add environment variable NVIDIA_VISIBLE_DEVICES=all",
-                    "Add environment variable NVIDIA_DRIVER_CAPABILITIES=all",
-                    "Apply changes and restart the container"
+                    "Add environment variable NVIDIA_DRIVER_CAPABILITIES=compute,video,utility",
+                    "Apply and restart the container"
                 }
             });
         }
         else
         {
+            var missing = new List<string>();
+            if (!hasNvidiaUvm) missing.Add("/dev/nvidia-uvm");
+            var detail = "NVIDIA device nodes found: " + (hasNvidiaCtl ? "/dev/nvidiactl " : "") + (hasNvidia0 ? "/dev/nvidia0 " : "") + (hasNvidiaUvm ? "/dev/nvidia-uvm" : "");
+
             results.Add(new DiagnosticResult
             {
-                Severity = DiagnosticSeverity.Info,
-                Status = DiagnosticStatus.Working,
+                Severity = missing.Count > 0 ? DiagnosticSeverity.Warning : DiagnosticSeverity.Info,
+                Status = missing.Count > 0 ? DiagnosticStatus.Degraded : DiagnosticStatus.Working,
                 Category = Category,
-                Title = "NVIDIA device nodes found",
-                Detail = "NVIDIA GPU devices are visible inside the container at /dev/nvidia*.",
-                UnraidContext = string.Empty,
-                FixSteps = new List<string>()
+                Title = missing.Count > 0 ? "NVIDIA devices partially present" : "NVIDIA device nodes found",
+                Detail = detail,
+                UnraidContext = missing.Count > 0 ? "Missing UVM device can cause CUDA init failures. Ensure NVIDIA_DRIVER_CAPABILITIES includes 'compute'." : string.Empty,
+                FixSteps = missing.Count > 0 ? new List<string> { "Set NVIDIA_DRIVER_CAPABILITIES=compute,video,utility in the container env" } : new List<string>()
             });
         }
 
@@ -138,6 +138,7 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
             process.StartInfo = new ProcessStartInfo
             {
                 FileName = "nvidia-smi",
+                Arguments = "--query-gpu=name --format=csv,noheader",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -160,49 +161,25 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
                 Severity = DiagnosticSeverity.Warning,
                 Status = DiagnosticStatus.Degraded,
                 Category = Category,
-                Title = "nvidia-smi not available",
-                Detail = "The nvidia-smi command is not available inside the container. GPU status cannot be verified, but transcoding may still work if device nodes are present.",
-                UnraidContext = "nvidia-smi is typically included when the NVIDIA runtime is properly configured. Its absence may indicate an incomplete NVIDIA setup.",
+                Title = "nvidia-smi not available or failed",
+                Detail = "nvidia-smi is not available inside the container or returned an error.",
+                UnraidContext = "nvidia-smi availability depends on the container runtime being set to 'nvidia'. Transcoding may still work if device nodes are present.",
                 FixSteps = new List<string>
                 {
-                    "Ensure '--runtime=nvidia' is set in the container's Extra Parameters",
-                    "Verify the Nvidia-Driver plugin is installed and up to date on Unraid",
-                    "Restart the container after making changes"
+                    "Verify '--runtime=nvidia' is in the container's Extra Parameters",
+                    "Ensure the Nvidia-Driver plugin matches your Unraid version",
+                    "Reboot Unraid after plugin updates"
                 }
-            });
-        }
-        else
-        {
-            results.Add(new DiagnosticResult
-            {
-                Severity = DiagnosticSeverity.Info,
-                Status = DiagnosticStatus.Working,
-                Category = Category,
-                Title = "nvidia-smi is available",
-                Detail = "NVIDIA GPU driver tools are accessible inside the container.",
-                UnraidContext = string.Empty,
-                FixSteps = new List<string>()
             });
         }
     }
 
-    private void CheckDriDevices(List<DiagnosticResult> results, string hwAccelType)
+    private void CheckDriDevices(List<DiagnosticResult> results, HardwareAccelerationType hwAccelType)
     {
-        bool hasRenderNode = false;
-        try
-        {
-            if (Directory.Exists("/dev/dri"))
-            {
-                var driFiles = Directory.GetFiles("/dev/dri");
-                hasRenderNode = driFiles.Any(f => Path.GetFileName(f).StartsWith("renderD", StringComparison.OrdinalIgnoreCase));
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to check /dev/dri devices");
-        }
+        bool hasDriDir = Directory.Exists("/dev/dri");
+        bool hasRenderD128 = File.Exists("/dev/dri/renderD128");
 
-        if (!Directory.Exists("/dev/dri"))
+        if (!hasDriDir)
         {
             results.Add(new DiagnosticResult
             {
@@ -210,33 +187,33 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
                 Status = DiagnosticStatus.Broken,
                 Category = Category,
                 Title = "/dev/dri not found",
-                Detail = hwAccelType.ToUpperInvariant() + " is configured but /dev/dri does not exist inside the container.",
-                UnraidContext = "On Unraid, /dev/dri must be passed through to the Docker container for Intel/AMD GPU access.",
+                Detail = hwAccelType + " is configured but /dev/dri does not exist inside the container.",
+                UnraidContext = "/dev/dri must be passed through to the Jellyfin Docker container for Intel/AMD GPU access.",
                 FixSteps = new List<string>
                 {
-                    "In Unraid Docker settings, edit the Jellyfin container",
+                    "In Unraid, edit the Jellyfin Docker container",
                     "Add a device mapping: /dev/dri -> /dev/dri",
-                    "Apply changes and restart the container",
-                    "Verify /dev/dri exists on the Unraid host (ls /dev/dri)"
+                    "Apply and restart the container",
+                    "Verify /dev/dri exists on the Unraid host first (ls /dev/dri)"
                 }
             });
         }
-        else if (!hasRenderNode)
+        else if (!hasRenderD128)
         {
             results.Add(new DiagnosticResult
             {
                 Severity = DiagnosticSeverity.Warning,
                 Status = DiagnosticStatus.Degraded,
                 Category = Category,
-                Title = "No render node found in /dev/dri",
-                Detail = "/dev/dri exists but no renderD* device was found. Hardware transcoding may not work.",
-                UnraidContext = "The render node (e.g., renderD128) is required for VAAPI/QSV encoding. It may be missing if the GPU driver isn't properly loaded on the Unraid host.",
+                Title = "renderD128 missing from /dev/dri",
+                Detail = "/dev/dri exists but /dev/dri/renderD128 is missing. Hardware transcoding requires the render node.",
+                UnraidContext = "The render node is required for VAAPI/QSV encoding. It may be missing if the GPU driver isn't loaded on the Unraid host.",
                 FixSteps = new List<string>
                 {
-                    "On the Unraid console, run: ls -la /dev/dri/",
-                    "If renderD128 is missing, check that the Intel/AMD GPU driver is loaded",
-                    "For Intel iGPU: ensure the i915 module is loaded (modprobe i915)",
-                    "Restart the Docker container after verifying the host devices"
+                    "On Unraid console: ls -la /dev/dri/",
+                    "If renderD128 missing, check GPU driver: lsmod | grep -E 'i915|amdgpu|radeon'",
+                    "For Intel iGPU ensure i915 module is loaded",
+                    "Restart the container after verifying host devices"
                 }
             });
         }
@@ -247,28 +224,34 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
                 Severity = DiagnosticSeverity.Info,
                 Status = DiagnosticStatus.Working,
                 Category = Category,
-                Title = "/dev/dri devices found with render node",
-                Detail = "GPU render devices are visible inside the container.",
+                Title = "/dev/dri/renderD128 present",
+                Detail = "GPU render node is accessible inside the container.",
                 UnraidContext = string.Empty,
                 FixSteps = new List<string>()
             });
         }
     }
 
-    private async Task CheckFfmpegEncoders(List<DiagnosticResult> results, string hwAccelType, CancellationToken cancellationToken)
+    private async Task CheckFfmpegEncoders(List<DiagnosticResult> results, HardwareAccelerationType hwAccelType, string? ffmpegPath, CancellationToken cancellationToken)
     {
-        var encoderMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        string? expectedEncoder = hwAccelType switch
         {
-            { "nvenc", "h264_nvenc" },
-            { "vaapi", "h264_vaapi" },
-            { "qsv", "h264_qsv" }
+            HardwareAccelerationType.nvenc => "h264_nvenc",
+            HardwareAccelerationType.vaapi => "h264_vaapi",
+            HardwareAccelerationType.qsv => "h264_qsv",
+            HardwareAccelerationType.amf => "h264_amf",
+            HardwareAccelerationType.videotoolbox => "h264_videotoolbox",
+            HardwareAccelerationType.v4l2m2m => "h264_v4l2m2m",
+            HardwareAccelerationType.rkmpp => "h264_rkmpp",
+            _ => null
         };
 
-        if (!encoderMap.TryGetValue(hwAccelType, out var expectedEncoder))
+        if (expectedEncoder == null)
         {
             return;
         }
 
+        var ffmpegExe = string.IsNullOrWhiteSpace(ffmpegPath) ? "ffmpeg" : ffmpegPath;
         string ffmpegOutput = string.Empty;
         bool ffmpegRan = false;
 
@@ -277,8 +260,8 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
             using var process = new Process();
             process.StartInfo = new ProcessStartInfo
             {
-                FileName = "ffmpeg",
-                Arguments = "-encoders",
+                FileName = ffmpegExe,
+                Arguments = "-hide_banner -encoders",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -287,11 +270,11 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
             process.Start();
             ffmpegOutput = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            ffmpegRan = true;
+            ffmpegRan = process.ExitCode == 0;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to run ffmpeg -encoders");
+            _logger.LogWarning(ex, "Failed to run {FFmpeg} -encoders", ffmpegExe);
         }
 
         if (!ffmpegRan)
@@ -302,12 +285,13 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
                 Status = DiagnosticStatus.Unknown,
                 Category = Category,
                 Title = "Could not verify FFmpeg encoders",
-                Detail = "Failed to run 'ffmpeg -encoders'. Cannot verify if the required hardware encoder is available.",
-                UnraidContext = "Jellyfin's bundled FFmpeg should be available. If this fails, the Jellyfin installation may be incomplete.",
+                Detail = "Failed to run '" + ffmpegExe + " -encoders'. Cannot verify hardware encoder availability.",
+                UnraidContext = "Jellyfin's bundled FFmpeg (jellyfin-ffmpeg) is used by default. If a custom path is set, it must exist and be executable inside the container.",
                 FixSteps = new List<string>
                 {
-                    "Verify Jellyfin is using its bundled FFmpeg (check Dashboard > Playback > FFmpeg path)",
-                    "If using a custom FFmpeg, ensure it's compiled with the required hardware encoder support"
+                    "Check Dashboard > Playback > FFmpeg path",
+                    "Clear the field to use bundled jellyfin-ffmpeg",
+                    "If using linuxserver/jellyfin, ensure the image is up to date"
                 }
             });
             return;
@@ -323,14 +307,12 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
                 Status = DiagnosticStatus.Broken,
                 Category = Category,
                 Title = "FFmpeg encoder '" + expectedEncoder + "' not found",
-                Detail = hwAccelType.ToUpperInvariant() + " is configured but FFmpeg does not list the " + expectedEncoder + " encoder.",
-                UnraidContext = "This usually means the FFmpeg binary wasn't compiled with the required hardware encoder support, or the wrong FFmpeg path is configured.",
+                Detail = hwAccelType + " is configured but FFmpeg does not list the " + expectedEncoder + " encoder.",
+                UnraidContext = "jellyfin-ffmpeg includes all hardware encoders. If missing, a custom FFmpeg path without GPU support is likely configured.",
                 FixSteps = new List<string>
                 {
-                    "Ensure Jellyfin is using its official bundled FFmpeg",
-                    "Check Dashboard > Playback > FFmpeg path",
-                    "If using linuxserver/jellyfin image, ensure you're on the latest version",
-                    "Clear the FFmpeg path field to use the bundled version"
+                    "Clear the FFmpeg path in Dashboard > Playback to use bundled jellyfin-ffmpeg",
+                    "Update to the latest linuxserver/jellyfin or jellyfin/jellyfin image"
                 }
             });
         }
@@ -342,7 +324,7 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
                 Status = DiagnosticStatus.Working,
                 Category = Category,
                 Title = "FFmpeg encoder '" + expectedEncoder + "' is available",
-                Detail = "The required hardware encoder for " + hwAccelType.ToUpperInvariant() + " is present in FFmpeg.",
+                Detail = "The required hardware encoder is present in FFmpeg.",
                 UnraidContext = string.Empty,
                 FixSteps = new List<string>()
             });
@@ -379,14 +361,14 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
                 Status = totalErrors > 10 ? DiagnosticStatus.Broken : DiagnosticStatus.Degraded,
                 Category = Category,
                 Title = "Transcode errors found in logs (" + totalErrors + " total)",
-                Detail = "The following error patterns were found in recent Jellyfin logs:\n" + string.Join("\n", detail),
-                UnraidContext = "Transcode errors in Docker often indicate missing device passthrough, incorrect permissions on /dev/dri, or an FFmpeg version mismatch.",
+                Detail = "Error patterns found in recent logs:\n" + string.Join("\n", detail),
+                UnraidContext = "Transcode errors on Unraid Docker commonly mean missing device passthrough, /dev/dri permission issues, or a stale container image.",
                 FixSteps = new List<string>
                 {
                     "Check the full Jellyfin log for detailed error messages",
                     "Verify GPU device passthrough in Unraid Docker settings",
-                    "Ensure the Jellyfin container user has access to GPU devices",
-                    "On Unraid, check that /dev/dri permissions include the container's GID (usually 100)"
+                    "On Unraid, check /dev/dri permissions include the container's GID (usually 100)",
+                    "For Intel iGPU, set group_add: [100] or add --group-add=video"
                 }
             });
         }
@@ -398,7 +380,7 @@ public class HardwareAccelerationChecker : IDiagnosticChecker
                 Status = DiagnosticStatus.Working,
                 Category = Category,
                 Title = "No transcode errors in recent logs",
-                Detail = "No hardware acceleration or transcoding errors were found in recent log entries.",
+                Detail = "No hardware acceleration or transcoding errors found in recent log entries.",
                 UnraidContext = string.Empty,
                 FixSteps = new List<string>()
             });

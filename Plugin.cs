@@ -2,6 +2,8 @@ using JellyfinDiagnostics.Checkers;
 using JellyfinDiagnostics.Services;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Controller;
+using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,7 +31,8 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             new PluginPageInfo
             {
                 Name = "JellyfinDiagnostics",
-                EmbeddedResourcePath = "JellyfinDiagnostics.Pages.diagnosticsPage.html",
+                EmbeddedResourcePath = GetType().Namespace + ".Pages.diagnosticsPage.html",
+                EnableInMainMenu = true,
                 DisplayName = "Diagnostics"
             }
         };
@@ -38,15 +41,15 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
 public class DiagnosticsPluginServiceRegistrator : IPluginServiceRegistrator
 {
-    public void RegisterServices(IServiceCollection services)
+    public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
-        services.AddSingleton<LogAnalyzer>();
-        services.AddSingleton<DiagnosticsService>();
-        services.AddSingleton<AiIntegrationService>();
+        serviceCollection.AddSingleton<LogAnalyzer>();
+        serviceCollection.AddSingleton<DiagnosticsService>();
+        serviceCollection.AddSingleton<AiIntegrationService>();
 
-        services.AddSingleton<IDiagnosticChecker, HardwareAccelerationChecker>();
-        services.AddSingleton<IDiagnosticChecker, VolumePathChecker>();
-        services.AddSingleton<IDiagnosticChecker, PermissionsChecker>();
-        services.AddSingleton<IDiagnosticChecker, NetworkChecker>();
+        serviceCollection.AddSingleton<IDiagnosticChecker, HardwareAccelerationChecker>();
+        serviceCollection.AddSingleton<IDiagnosticChecker, VolumePathChecker>();
+        serviceCollection.AddSingleton<IDiagnosticChecker, PermissionsChecker>();
+        serviceCollection.AddSingleton<IDiagnosticChecker, NetworkChecker>();
     }
 }
