@@ -31,9 +31,28 @@ Each finding includes severity (Info / Warning / Critical), status (Working / De
 
 ## Installing
 
-### Option A — Pre-built DLL (recommended for end users)
+### Option A — Install via Jellyfin's plugin catalog (recommended)
 
-1. Grab the latest `JellyfinDiagnostics.dll` and `meta.json` from the [Releases page](https://github.com/Atvriders/jellyfin-plugin-diagnostics/releases) (or build them yourself — see Option B).
+This plugin ships with a plugin repository manifest that Jellyfin can read. No manual file copying needed once a release has been published.
+
+1. In Jellyfin, go to **Dashboard → Plugins → Repositories → +**
+2. Paste this into the **Repository URL** field:
+   ```
+   https://raw.githubusercontent.com/Atvriders/jellyfin-plugin-diagnostics/master/manifest.json
+   ```
+3. Give it any name (e.g., `Atvriders`) and click **Save**
+4. Go to the **Catalog** tab — "Jellyfin Diagnostics" now appears under the *General* category
+5. Click the plugin → **Install** → wait for confirmation
+6. Restart the Jellyfin container
+7. Go to **Dashboard → Plugins** to verify status is *Active*; a new **Diagnostics** entry appears in the admin menu
+
+Updates through this path happen in one click as new versions are published to the repository.
+
+**Note:** The first install requires at least one published GitHub release. If the catalog shows no available version, it means no release has been tagged yet — fall back to Option B or C below until a release is published.
+
+### Option B — Pre-built DLL
+
+1. Grab the latest `JellyfinDiagnostics.dll` and `meta.json` from the [Releases page](https://github.com/Atvriders/jellyfin-plugin-diagnostics/releases) (or build them yourself — see Option C).
 2. On your Unraid host, create the plugin directory **inside the Jellyfin appdata path**:
    ```bash
    mkdir -p /mnt/user/appdata/jellyfin/plugins/JellyfinDiagnostics_1.0.0.0
@@ -52,7 +71,7 @@ Each finding includes severity (Info / Warning / Critical), status (Working / De
 6. In the Jellyfin web UI, navigate to **Dashboard → Plugins**. You should see "Jellyfin Diagnostics" in the list with status *Active*.
 7. A new **"Diagnostics"** entry appears in the admin side menu. Click it to open the dashboard.
 
-### Option B — Build from source
+### Option C — Build from source
 
 You need the **.NET 8.0 SDK** installed (on the build machine, not on Unraid):
 
@@ -63,11 +82,7 @@ dotnet restore
 dotnet build -c Release
 ```
 
-The output DLL will be at `bin/Release/net8.0/JellyfinDiagnostics.dll`. Then follow steps 2–7 of Option A.
-
-### Option C — Jellyfin plugin repository (optional, self-hosted)
-
-You can host `meta.json` as a Jellyfin plugin repository so the plugin installs/updates through the Jellyfin UI instead of manual file copy. Host the DLL behind an HTTPS URL, set it in `meta.json → versions[].sourceUrl`, then in Jellyfin go to **Dashboard → Plugins → Repositories → Add** and paste the repository JSON URL. This is out-of-scope for this README but standard Jellyfin workflow.
+The output DLL will be at `bin/Release/net8.0/JellyfinDiagnostics.dll`. Then follow steps 2–7 of Option B.
 
 ### Verifying the install
 

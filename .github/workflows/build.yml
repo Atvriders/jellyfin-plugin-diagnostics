@@ -1,0 +1,112 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JellyfinDiagnostics
+          path: bin/Release/net8.0/JellyfinDiagnostics.dll
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build Release DLL
+        run: |
+          dotnet restore
+          dotnet build -c Release --no-restore
+
+      - name: Package plugin zip
+        id: package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p release
+          cp bin/Release/net8.0/JellyfinDiagnostics.dll release/
+          cp meta.json release/
+          cd release
+          zip -r "jellyfin-plugin-diagnostics_${VERSION}.zip" JellyfinDiagnostics.dll meta.json
+          CHECKSUM=$(md5sum "jellyfin-plugin-diagnostics_${VERSION}.zip" | cut -d' ' -f1)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "checksum=${CHECKSUM}" >> "$GITHUB_OUTPUT"
+          echo "zipname=jellyfin-plugin-diagnostics_${VERSION}.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/jellyfin-plugin-diagnostics_${{ steps.package.outputs.version }}.zip
+            release/JellyfinDiagnostics.dll
+
+      - name: Update manifest.json
+        env:
+          VERSION: ${{ steps.package.outputs.version }}
+          CHECKSUM: ${{ steps.package.outputs.checksum }}
+          ZIPNAME: ${{ steps.package.outputs.zipname }}
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          SOURCE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/${ZIPNAME}"
+          CHANGELOG=$(gh release view "v${VERSION}" --json body -q .body 2>/dev/null || echo "See release notes")
+
+          python3 <<PYEOF
+          import json, os
+          with open('manifest.json', 'r') as f:
+              data = json.load(f)
+          plugin = data[0] if isinstance(data, list) else data
+          new_version = {
+              "version": os.environ['VERSION'] + ".0",
+              "changelog": """$CHANGELOG""",
+              "targetAbi": "10.11.0.0",
+              "sourceUrl": os.environ.get('SOURCE_URL', ''),
+              "checksum": os.environ['CHECKSUM'],
+              "timestamp": """$TIMESTAMP"""
+          }
+          plugin['versions'] = [new_version] + [v for v in plugin.get('versions', []) if v.get('version') != new_version['version']]
+          with open('manifest.json', 'w') as f:
+              json.dump([plugin] if isinstance(data, list) else plugin, f, indent=2)
+          PYEOF
+
+      - name: Commit manifest update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git diff --cached --quiet || git commit -m "chore: update manifest for v${{ steps.package.outputs.version }}"
+          git push origin HEAD:master

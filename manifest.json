@@ -1,0 +1,12 @@
+[
+  {
+    "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Jellyfin Diagnostics",
+    "description": "Admin diagnostics plugin for detecting common Docker/Unraid configuration issues in Jellyfin 10.11.x.",
+    "overview": "Analyzes Jellyfin server configuration and environment to detect hardware acceleration, volume mapping, permission, and networking issues. Optionally forwards sanitized reports to any OpenAI-compatible AI endpoint for analysis.",
+    "owner": "Atvriders",
+    "category": "General",
+    "imageUrl": "",
+    "versions": []
+  }
+]
