@@ -62,5 +62,11 @@ public class DiagnosticsPluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IDiagnosticChecker, VolumePathChecker>();
         serviceCollection.AddSingleton<IDiagnosticChecker, PermissionsChecker>();
         serviceCollection.AddSingleton<IDiagnosticChecker, NetworkChecker>();
+        serviceCollection.AddSingleton<IDiagnosticChecker, DatabaseHealthChecker>();
+        serviceCollection.AddSingleton<IDiagnosticChecker, PerformanceChecker>();
+        serviceCollection.AddSingleton<IDiagnosticChecker, ContainerResourceChecker>();
+        serviceCollection.AddSingleton<IDiagnosticChecker, ScheduledTasksChecker>();
+        serviceCollection.AddSingleton<IDiagnosticChecker, PluginHealthChecker>();
+        serviceCollection.AddSingleton<IDiagnosticChecker, SecurityChecker>();
     }
 }
