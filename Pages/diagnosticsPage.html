@@ -3,288 +3,286 @@
 <head>
     <meta charset="UTF-8">
     <title>Jellyfin Diagnostics</title>
-    <style>
-        .diagnostics-container { max-width: 960px; margin: 0 auto; padding: 20px; color: #fff; }
-        .diagnostics-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-        .diagnostics-header h1 { margin: 0; font-size: 24px; }
-        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
-        .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 600; }
-        .btn:hover { opacity: 0.85; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-primary { background: #00a4dc; color: #fff; }
-        .btn-secondary { background: #333; color: #fff; border: 1px solid #555; }
-        .btn-ai { background: #7b2ff7; color: #fff; }
-        .summary-bar { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-        .summary-badge { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 14px; }
-        .badge-critical { background: rgba(244, 67, 54, 0.15); color: #f44336; border: 1px solid rgba(244, 67, 54, 0.3); }
-        .badge-warning { background: rgba(255, 152, 0, 0.15); color: #ff9800; border: 1px solid rgba(255, 152, 0, 0.3); }
-        .badge-info { background: rgba(0, 164, 220, 0.15); color: #00a4dc; border: 1px solid rgba(0, 164, 220, 0.3); }
-        .category-section { margin-bottom: 20px; border: 1px solid #333; border-radius: 8px; overflow: hidden; }
-        .category-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; background: #1a1a1a; cursor: pointer; user-select: none; }
-        .category-header:hover { background: #222; }
-        .category-header h2 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
-        .category-toggle { font-size: 12px; color: #888; }
-        .category-body { padding: 0; }
-        .category-body.hidden { display: none; }
-        .finding { padding: 14px 18px; border-top: 1px solid #2a2a2a; }
-        .finding:first-child { border-top: none; }
-        .finding-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-        .finding-icon { font-size: 18px; flex-shrink: 0; }
-        .finding-title { font-weight: 600; font-size: 14px; }
-        .finding-detail { margin: 6px 0 6px 28px; color: #ccc; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
-        .finding-unraid { margin: 6px 0 6px 28px; padding: 8px 12px; background: rgba(255, 152, 0, 0.08); border-left: 3px solid #ff9800; border-radius: 0 4px 4px 0; font-size: 13px; color: #ddd; }
-        .finding-unraid strong { color: #ff9800; }
-        .fix-steps { margin: 8px 0 0 28px; padding: 10px 14px; background: #1a1a1a; border-radius: 4px; }
-        .fix-steps-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; margin-bottom: 6px; }
-        .fix-steps ol { margin: 0; padding-left: 20px; font-size: 13px; color: #ccc; line-height: 1.8; }
-        .loading { text-align: center; padding: 60px 20px; color: #888; font-size: 16px; }
-        .spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid #333; border-top-color: #00a4dc; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 10px; vertical-align: middle; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .empty-state { text-align: center; padding: 60px 20px; color: #666; }
-        .empty-state p { font-size: 16px; margin-bottom: 20px; }
-        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); z-index: 1000; justify-content: center; align-items: center; }
-        .modal-overlay.visible { display: flex; }
-        .modal { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80vh; overflow-y: auto; padding: 24px; }
-        .modal h3 { margin: 0 0 16px 0; }
-        .modal pre { background: #111; padding: 16px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; font-size: 13px; line-height: 1.5; }
-        .report-meta { margin-bottom: 20px; padding: 12px 16px; background: #1a1a1a; border-radius: 6px; font-size: 13px; color: #aaa; display: flex; gap: 24px; flex-wrap: wrap; }
-    </style>
 </head>
 <body>
-    <div class="diagnostics-container">
-        <div class="diagnostics-header">
-            <h1>Jellyfin Diagnostics</h1>
-            <div class="btn-group">
-                <button class="btn btn-primary" id="btnRun">Run Diagnostics</button>
-                <button class="btn btn-secondary" id="btnExport" disabled>Export Report</button>
-                <button class="btn btn-ai" id="btnAi" style="display:none">Analyze with AI</button>
+    <div id="JellyfinDiagnosticsDashboardPage"
+         data-role="page"
+         class="page type-interior pluginConfigurationPage"
+         data-require="emby-button">
+        <div data-role="content">
+            <div class="content-primary">
+                <style>
+                    #JellyfinDiagnosticsDashboardPage .diag-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-header h1 { margin: 0; font-size: 24px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+                    #JellyfinDiagnosticsDashboardPage .diag-summary-bar { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+                    #JellyfinDiagnosticsDashboardPage .diag-summary-badge { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 14px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-badge-critical { background: rgba(244, 67, 54, 0.15); color: #f44336; border: 1px solid rgba(244, 67, 54, 0.3); }
+                    #JellyfinDiagnosticsDashboardPage .diag-badge-warning { background: rgba(255, 152, 0, 0.15); color: #ff9800; border: 1px solid rgba(255, 152, 0, 0.3); }
+                    #JellyfinDiagnosticsDashboardPage .diag-badge-info { background: rgba(0, 164, 220, 0.15); color: #00a4dc; border: 1px solid rgba(0, 164, 220, 0.3); }
+                    #JellyfinDiagnosticsDashboardPage .diag-category-section { margin-bottom: 20px; border: 1px solid #333; border-radius: 8px; overflow: hidden; }
+                    #JellyfinDiagnosticsDashboardPage .diag-category-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; background: #1a1a1a; cursor: pointer; user-select: none; }
+                    #JellyfinDiagnosticsDashboardPage .diag-category-header:hover { background: #222; }
+                    #JellyfinDiagnosticsDashboardPage .diag-category-header h2 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-category-toggle { font-size: 12px; color: #888; }
+                    #JellyfinDiagnosticsDashboardPage .diag-category-body { padding: 0; }
+                    #JellyfinDiagnosticsDashboardPage .diag-category-body.hidden { display: none; }
+                    #JellyfinDiagnosticsDashboardPage .diag-finding { padding: 14px 18px; border-top: 1px solid #2a2a2a; }
+                    #JellyfinDiagnosticsDashboardPage .diag-finding:first-child { border-top: none; }
+                    #JellyfinDiagnosticsDashboardPage .diag-finding-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-finding-icon { font-size: 18px; flex-shrink: 0; }
+                    #JellyfinDiagnosticsDashboardPage .diag-finding-title { font-weight: 600; font-size: 14px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-finding-detail { margin: 6px 0 6px 28px; color: #ccc; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+                    #JellyfinDiagnosticsDashboardPage .diag-finding-unraid { margin: 6px 0 6px 28px; padding: 8px 12px; background: rgba(255, 152, 0, 0.08); border-left: 3px solid #ff9800; border-radius: 0 4px 4px 0; font-size: 13px; color: #ddd; }
+                    #JellyfinDiagnosticsDashboardPage .diag-finding-unraid strong { color: #ff9800; }
+                    #JellyfinDiagnosticsDashboardPage .diag-fix-steps { margin: 8px 0 0 28px; padding: 10px 14px; background: #1a1a1a; border-radius: 4px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-fix-steps-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; margin-bottom: 6px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-fix-steps ol { margin: 0; padding-left: 20px; font-size: 13px; color: #ccc; line-height: 1.8; }
+                    #JellyfinDiagnosticsDashboardPage .diag-loading { text-align: center; padding: 60px 20px; color: #888; font-size: 16px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid #333; border-top-color: #00a4dc; border-radius: 50%; animation: diagspin 0.8s linear infinite; margin-right: 10px; vertical-align: middle; }
+                    @keyframes diagspin { to { transform: rotate(360deg); } }
+                    #JellyfinDiagnosticsDashboardPage .diag-empty-state { text-align: center; padding: 60px 20px; color: #888; }
+                    #JellyfinDiagnosticsDashboardPage .diag-empty-state p { font-size: 15px; margin: 6px 0; }
+                    #JellyfinDiagnosticsDashboardPage .diag-report-meta { margin-bottom: 20px; padding: 12px 16px; background: #1a1a1a; border-radius: 6px; font-size: 13px; color: #aaa; display: flex; gap: 24px; flex-wrap: wrap; }
+                    #JellyfinDiagnosticsDashboardPage .diag-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); z-index: 1000; justify-content: center; align-items: center; }
+                    #JellyfinDiagnosticsDashboardPage .diag-modal-overlay.visible { display: flex; }
+                    #JellyfinDiagnosticsDashboardPage .diag-modal { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80vh; overflow-y: auto; padding: 24px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-modal h3 { margin: 0 0 16px 0; }
+                    #JellyfinDiagnosticsDashboardPage .diag-modal pre { background: #111; padding: 16px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; font-size: 13px; line-height: 1.5; }
+                </style>
+
+                <div class="diag-header">
+                    <h1>Jellyfin Diagnostics</h1>
+                    <div class="diag-btn-group">
+                        <button is="emby-button" type="button" class="raised button-submit diag-run-btn">
+                            <span>Run Diagnostics</span>
+                        </button>
+                        <button is="emby-button" type="button" class="raised diag-export-btn" disabled>
+                            <span>Export Report</span>
+                        </button>
+                        <button is="emby-button" type="button" class="raised diag-ai-btn" style="display:none">
+                            <span>Analyze with AI</span>
+                        </button>
+                    </div>
+                </div>
+
+                <p style="color:#aaa;max-width:720px;font-size:13px">
+                    Read-only checks against your Jellyfin server configuration and the Docker container environment.
+                    Nothing is modified automatically &mdash; fixes are presented as step-by-step instructions.
+                    Configure AI integration in <strong>Dashboard &rarr; Plugins &rarr; Jellyfin Diagnostics &rarr; Settings</strong>.
+                </p>
+
+                <div class="diag-content">
+                    <div class="diag-empty-state">
+                        <p>Click <strong>Run Diagnostics</strong> to analyze your Jellyfin server configuration.</p>
+                        <p style="font-size: 13px; color: #555;">Checks cover hardware acceleration, volume mappings, permissions, and networking issues common to Docker/Unraid deployments.</p>
+                    </div>
+                </div>
+
+                <div class="diag-modal-overlay">
+                    <div class="diag-modal">
+                        <h3>AI Analysis</h3>
+                        <pre class="diag-ai-response">Loading...</pre>
+                        <button is="emby-button" type="button" class="raised diag-modal-close">
+                            <span>Close</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
-        <div id="content">
-            <div class="empty-state">
-                <p>Click "Run Diagnostics" to analyze your Jellyfin server configuration.</p>
-                <p style="font-size: 13px; color: #555;">This plugin checks hardware acceleration, volume mappings, permissions, and networking issues common to Docker/Unraid deployments.</p>
-            </div>
-        </div>
-    </div>
-    <div class="modal-overlay" id="aiModal">
-        <div class="modal">
-            <h3>AI Analysis</h3>
-            <pre id="aiResponse">Loading...</pre>
-            <button class="btn btn-secondary" id="btnCloseModal">Close</button>
-        </div>
-    </div>
-    <script>
-        (function () {
-            var currentReport = null;
 
-            function getHeaders() {
-                return {
-                    'X-Emby-Token': ApiClient.accessToken(),
-                    'Content-Type': 'application/json'
-                };
-            }
+        <script type="text/javascript">
+            (function () {
+                var page = document.querySelector('#JellyfinDiagnosticsDashboardPage');
+                var currentReport = null;
 
-            function clearNode(node) {
-                while (node.firstChild) {
-                    node.removeChild(node.firstChild);
+                function clearNode(node) {
+                    while (node.firstChild) {
+                        node.removeChild(node.firstChild);
+                    }
                 }
-            }
 
-            function el(tag, className, text) {
-                var e = document.createElement(tag);
-                if (className) e.className = className;
-                if (text !== undefined && text !== null) e.textContent = text;
-                return e;
-            }
+                function el(tag, className, text) {
+                    var e = document.createElement(tag);
+                    if (className) e.className = className;
+                    if (text !== undefined && text !== null) e.textContent = text;
+                    return e;
+                }
 
-            function severityIcon(severity) {
-                if (severity === 2) return '\u274C';
-                if (severity === 1) return '\u26A0\uFE0F';
-                return '\u2705';
-            }
+                function severityIcon(severity) {
+                    if (severity === 2) return '\u274C';
+                    if (severity === 1) return '\u26A0\uFE0F';
+                    return '\u2705';
+                }
 
-            async function runDiagnostics() {
-                var btn = document.getElementById('btnRun');
-                var content = document.getElementById('content');
+                function getSev(f) { return f.Severity !== undefined ? f.Severity : f.severity; }
 
-                btn.disabled = true;
-                btn.textContent = 'Scanning...';
-                clearNode(content);
-                var loading = el('div', 'loading');
-                var spinner = el('span', 'spinner');
-                loading.appendChild(spinner);
-                loading.appendChild(document.createTextNode('Running diagnostics...'));
-                content.appendChild(loading);
+                function runDiagnostics() {
+                    var runBtn = page.querySelector('.diag-run-btn');
+                    var runBtnSpan = runBtn.querySelector('span');
+                    var content = page.querySelector('.diag-content');
 
-                try {
-                    var response = await fetch(ApiClient.serverAddress() + '/Diagnostics/Run', {
-                        headers: getHeaders()
-                    });
-                    if (!response.ok) throw new Error('HTTP ' + response.status);
-                    currentReport = await response.json();
-                    renderReport(currentReport);
-                    document.getElementById('btnExport').disabled = false;
-                    checkAiAvailability();
-                } catch (err) {
+                    runBtn.disabled = true;
+                    runBtnSpan.textContent = 'Scanning...';
                     clearNode(content);
-                    var errDiv = el('div', 'empty-state');
-                    var errP = el('p', null, 'Error running diagnostics: ' + err.message);
-                    errP.style.color = '#f44336';
-                    errDiv.appendChild(errP);
-                    content.appendChild(errDiv);
-                } finally {
-                    btn.disabled = false;
-                    btn.textContent = 'Run Diagnostics';
+                    var loading = el('div', 'diag-loading');
+                    loading.appendChild(el('span', 'diag-spinner'));
+                    loading.appendChild(document.createTextNode('Running diagnostics...'));
+                    content.appendChild(loading);
+
+                    ApiClient.ajax({
+                        type: 'GET',
+                        url: ApiClient.getUrl('Diagnostics/Run'),
+                        dataType: 'json'
+                    }).then(function (report) {
+                        currentReport = report;
+                        renderReport(report);
+                        page.querySelector('.diag-export-btn').disabled = false;
+                        updateAiButtonVisibility();
+                    }).catch(function (err) {
+                        clearNode(content);
+                        var errDiv = el('div', 'diag-empty-state');
+                        var errP = el('p', null, 'Error running diagnostics: ' + (err && err.message ? err.message : 'Unknown error'));
+                        errP.style.color = '#f44336';
+                        errDiv.appendChild(errP);
+                        content.appendChild(errDiv);
+                    }).finally(function () {
+                        runBtn.disabled = false;
+                        runBtnSpan.textContent = 'Run Diagnostics';
+                    });
                 }
-            }
 
-            function renderReport(report) {
-                var content = document.getElementById('content');
-                clearNode(content);
+                function renderReport(report) {
+                    var content = page.querySelector('.diag-content');
+                    clearNode(content);
 
-                var meta = el('div', 'report-meta');
-                meta.appendChild(el('span', null, 'Scanned: ' + new Date(report.timestamp).toLocaleString()));
-                meta.appendChild(el('span', null, 'Jellyfin: ' + report.jellyfinVersion));
-                meta.appendChild(el('span', null, 'OS: ' + report.operatingSystem));
-                content.appendChild(meta);
+                    var meta = el('div', 'diag-report-meta');
+                    meta.appendChild(el('span', null, 'Scanned: ' + new Date(report.Timestamp || report.timestamp).toLocaleString()));
+                    meta.appendChild(el('span', null, 'Jellyfin: ' + (report.JellyfinVersion || report.jellyfinVersion || '')));
+                    meta.appendChild(el('span', null, 'OS: ' + (report.OperatingSystem || report.operatingSystem || '')));
+                    content.appendChild(meta);
 
-                var criticalCount = report.results.filter(function (r) { return r.severity === 2; }).length;
-                var warningCount = report.results.filter(function (r) { return r.severity === 1; }).length;
-                var infoCount = report.results.filter(function (r) { return r.severity === 0; }).length;
+                    var results = report.Results || report.results || [];
+                    var criticalCount = results.filter(function (r) { return getSev(r) === 2; }).length;
+                    var warningCount = results.filter(function (r) { return getSev(r) === 1; }).length;
+                    var infoCount = results.filter(function (r) { return getSev(r) === 0; }).length;
 
-                var summary = el('div', 'summary-bar');
-                summary.appendChild(el('div', 'summary-badge badge-critical', '\u274C ' + criticalCount + ' Critical'));
-                summary.appendChild(el('div', 'summary-badge badge-warning', '\u26A0\uFE0F ' + warningCount + ' Warning'));
-                summary.appendChild(el('div', 'summary-badge badge-info', '\u2705 ' + infoCount + ' Info'));
-                content.appendChild(summary);
+                    var summary = el('div', 'diag-summary-bar');
+                    summary.appendChild(el('div', 'diag-summary-badge diag-badge-critical', '\u274C ' + criticalCount + ' Critical'));
+                    summary.appendChild(el('div', 'diag-summary-badge diag-badge-warning', '\u26A0\uFE0F ' + warningCount + ' Warning'));
+                    summary.appendChild(el('div', 'diag-summary-badge diag-badge-info', '\u2705 ' + infoCount + ' Info'));
+                    content.appendChild(summary);
 
-                var categories = {};
-                report.results.forEach(function (r) {
-                    if (!categories[r.category]) categories[r.category] = [];
-                    categories[r.category].push(r);
+                    var categories = {};
+                    results.forEach(function (r) {
+                        var cat = r.Category || r.category || 'Other';
+                        if (!categories[cat]) categories[cat] = [];
+                        categories[cat].push(r);
+                    });
+
+                    Object.keys(categories).forEach(function (category) {
+                        var findings = categories[category];
+                        var hasCritical = findings.some(function (f) { return getSev(f) === 2; });
+                        var hasWarning = findings.some(function (f) { return getSev(f) === 1; });
+                        var catIcon = hasCritical ? '\u274C' : hasWarning ? '\u26A0\uFE0F' : '\u2705';
+
+                        var section = el('div', 'diag-category-section');
+                        var header = el('div', 'diag-category-header');
+                        header.appendChild(el('h2', null, catIcon + ' ' + category));
+                        header.appendChild(el('span', 'diag-category-toggle', '\u25BC'));
+                        var body = el('div', 'diag-category-body');
+                        header.addEventListener('click', function () {
+                            body.classList.toggle('hidden');
+                        });
+                        section.appendChild(header);
+
+                        findings.forEach(function (f) {
+                            var finding = el('div', 'diag-finding');
+                            var fh = el('div', 'diag-finding-header');
+                            fh.appendChild(el('span', 'diag-finding-icon', severityIcon(getSev(f))));
+                            fh.appendChild(el('span', 'diag-finding-title', f.Title || f.title || ''));
+                            finding.appendChild(fh);
+
+                            var detail = f.Detail || f.detail;
+                            if (detail) finding.appendChild(el('div', 'diag-finding-detail', detail));
+
+                            var unraid = f.UnraidContext || f.unraidContext;
+                            if (unraid) {
+                                var u = el('div', 'diag-finding-unraid');
+                                u.appendChild(el('strong', null, 'Unraid context: '));
+                                u.appendChild(document.createTextNode(unraid));
+                                finding.appendChild(u);
+                            }
+
+                            var fixSteps = f.FixSteps || f.fixSteps || [];
+                            if (fixSteps.length > 0) {
+                                var fix = el('div', 'diag-fix-steps');
+                                fix.appendChild(el('div', 'diag-fix-steps-title', 'How to fix'));
+                                var ol = el('ol');
+                                fixSteps.forEach(function (step) {
+                                    ol.appendChild(el('li', null, step));
+                                });
+                                fix.appendChild(ol);
+                                finding.appendChild(fix);
+                            }
+
+                            body.appendChild(finding);
+                        });
+
+                        section.appendChild(body);
+                        content.appendChild(section);
+                    });
+                }
+
+                function exportReport() {
+                    if (!currentReport) return;
+                    var json = JSON.stringify(currentReport, null, 2);
+                    var blob = new Blob([json], { type: 'application/json' });
+                    var url = URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'jellyfin-diagnostics-' + new Date().toISOString().slice(0, 10) + '.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }
+
+                function updateAiButtonVisibility() {
+                    var pluginId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        var btn = page.querySelector('.diag-ai-btn');
+                        btn.style.display = config.EnableAiIntegration ? 'inline-block' : 'none';
+                    });
+                }
+
+                function sendToAi() {
+                    var modal = page.querySelector('.diag-modal-overlay');
+                    var responseEl = page.querySelector('.diag-ai-response');
+                    modal.classList.add('visible');
+                    responseEl.textContent = 'Sending sanitized report to AI...\n(No passwords, tokens, IPs, or identifying info are sent)';
+
+                    ApiClient.ajax({
+                        type: 'POST',
+                        url: ApiClient.getUrl('Diagnostics/Ai'),
+                        dataType: 'json'
+                    }).then(function (data) {
+                        responseEl.textContent = typeof data.response === 'string' ? data.response : JSON.stringify(data.response || data, null, 2);
+                    }).catch(function (err) {
+                        responseEl.textContent = 'Error: ' + (err && err.message ? err.message : 'Request failed');
+                    });
+                }
+
+                page.addEventListener('pageshow', function () {
+                    updateAiButtonVisibility();
                 });
 
-                Object.keys(categories).forEach(function (category) {
-                    var findings = categories[category];
-                    var hasCritical = findings.some(function (f) { return f.severity === 2; });
-                    var hasWarning = findings.some(function (f) { return f.severity === 1; });
-                    var catIcon = hasCritical ? '\u274C' : hasWarning ? '\u26A0\uFE0F' : '\u2705';
-
-                    var section = el('div', 'category-section');
-                    var header = el('div', 'category-header');
-                    var h2 = el('h2', null, catIcon + ' ' + category);
-                    header.appendChild(h2);
-                    header.appendChild(el('span', 'category-toggle', '\u25BC'));
-                    var body = el('div', 'category-body');
-                    header.addEventListener('click', function () {
-                        body.classList.toggle('hidden');
-                    });
-                    section.appendChild(header);
-
-                    findings.forEach(function (f) {
-                        var finding = el('div', 'finding');
-                        var fh = el('div', 'finding-header');
-                        fh.appendChild(el('span', 'finding-icon', severityIcon(f.severity)));
-                        fh.appendChild(el('span', 'finding-title', f.title));
-                        finding.appendChild(fh);
-
-                        if (f.detail) {
-                            finding.appendChild(el('div', 'finding-detail', f.detail));
-                        }
-
-                        if (f.unraidContext) {
-                            var unraid = el('div', 'finding-unraid');
-                            var strong = el('strong', null, 'Unraid context: ');
-                            unraid.appendChild(strong);
-                            unraid.appendChild(document.createTextNode(f.unraidContext));
-                            finding.appendChild(unraid);
-                        }
-
-                        if (f.fixSteps && f.fixSteps.length > 0) {
-                            var fix = el('div', 'fix-steps');
-                            fix.appendChild(el('div', 'fix-steps-title', 'How to fix'));
-                            var ol = el('ol');
-                            f.fixSteps.forEach(function (step) {
-                                ol.appendChild(el('li', null, step));
-                            });
-                            fix.appendChild(ol);
-                            finding.appendChild(fix);
-                        }
-
-                        body.appendChild(finding);
-                    });
-
-                    section.appendChild(body);
-                    content.appendChild(section);
+                page.querySelector('.diag-run-btn').addEventListener('click', runDiagnostics);
+                page.querySelector('.diag-export-btn').addEventListener('click', exportReport);
+                page.querySelector('.diag-ai-btn').addEventListener('click', sendToAi);
+                page.querySelector('.diag-modal-close').addEventListener('click', function () {
+                    page.querySelector('.diag-modal-overlay').classList.remove('visible');
                 });
-            }
-
-            function exportReport() {
-                if (!currentReport) return;
-                var json = JSON.stringify(currentReport, null, 2);
-                var blob = new Blob([json], { type: 'application/json' });
-                var url = URL.createObjectURL(blob);
-                var a = document.createElement('a');
-                a.href = url;
-                a.download = 'jellyfin-diagnostics-' + new Date().toISOString().slice(0, 10) + '.json';
-                a.click();
-                URL.revokeObjectURL(url);
-            }
-
-            async function checkAiAvailability() {
-                try {
-                    var response = await fetch(ApiClient.serverAddress() + '/Diagnostics/Ai', {
-                        method: 'POST',
-                        headers: getHeaders()
-                    });
-                    var btnAi = document.getElementById('btnAi');
-                    if (response.ok) {
-                        btnAi.style.display = 'inline-block';
-                    } else {
-                        var data = await response.json();
-                        if (data.error && data.error.indexOf('not enabled') !== -1) {
-                            btnAi.style.display = 'none';
-                        } else {
-                            btnAi.style.display = 'inline-block';
-                        }
-                    }
-                } catch (e) {
-                    document.getElementById('btnAi').style.display = 'none';
-                }
-            }
-
-            async function sendToAi() {
-                var modal = document.getElementById('aiModal');
-                var responseEl = document.getElementById('aiResponse');
-                modal.classList.add('visible');
-                responseEl.textContent = 'Sending sanitized report to AI...\n(No passwords, tokens, IPs, or identifying info are sent)';
-
-                try {
-                    var response = await fetch(ApiClient.serverAddress() + '/Diagnostics/Ai', {
-                        method: 'POST',
-                        headers: getHeaders()
-                    });
-                    if (!response.ok) {
-                        var errData = await response.json();
-                        throw new Error(errData.error || 'HTTP ' + response.status);
-                    }
-                    var data = await response.json();
-                    responseEl.textContent = typeof data.response === 'string' ? data.response : JSON.stringify(data.response, null, 2);
-                } catch (err) {
-                    responseEl.textContent = 'Error: ' + err.message;
-                }
-            }
-
-            function closeAiModal() {
-                document.getElementById('aiModal').classList.remove('visible');
-            }
-
-            document.getElementById('btnRun').addEventListener('click', runDiagnostics);
-            document.getElementById('btnExport').addEventListener('click', exportReport);
-            document.getElementById('btnAi').addEventListener('click', sendToAi);
-            document.getElementById('btnCloseModal').addEventListener('click', closeAiModal);
-        })();
-    </script>
+            })();
+        </script>
+    </div>
 </body>
 </html>
