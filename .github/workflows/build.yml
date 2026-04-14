@@ -108,6 +108,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git stash push manifest.json || true
+          git fetch origin master
+          git checkout master
+          git pull --rebase origin master
+          git stash pop || true
           git add manifest.json
           git diff --cached --quiet || git commit -m "chore: update manifest for v${{ steps.package.outputs.version }}"
-          git push origin HEAD:master
+          git push origin master
