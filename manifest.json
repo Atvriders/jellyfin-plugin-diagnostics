@@ -6,11 +6,10 @@
     "overview": "Analyzes Jellyfin server configuration and environment to detect hardware acceleration, volume mapping, permission, and networking issues. Optionally forwards sanitized reports to any OpenAI-compatible AI endpoint for analysis.",
     "owner": "Atvriders",
     "category": "General",
-    "imageUrl": "",
     "versions": [
       {
         "version": "1.0.1.0",
-        "changelog": "Adds a proper Settings page (configPage.html) with form fields for AI integration toggle, endpoint URL, API key, and log lines to scan. Clicking Settings next to the plugin in Dashboard -> Plugins now shows a working configuration form. The separate Diagnostics entry in the admin side menu continues to serve the dashboard view for running scans.\n\n**Install / upgrade:** via the Jellyfin plugin catalog using the repository URL https://raw.githubusercontent.com/Atvriders/jellyfin-plugin-diagnostics/master/manifest.json",
+        "changelog": "Adds a proper Settings page with form fields for AI integration toggle, endpoint URL, API key, and log lines to scan. Clicking Settings next to the plugin in Dashboard -> Plugins now shows a working configuration form. The separate Diagnostics entry in the admin side menu continues to serve the dashboard view for running scans.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/Atvriders/jellyfin-plugin-diagnostics/releases/download/v1.0.1/jellyfin-plugin-diagnostics_1.0.1.zip",
         "checksum": "817d6e00a2e021ca7c5a9b4d8edc7453",

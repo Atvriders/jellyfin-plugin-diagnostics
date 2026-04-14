@@ -58,9 +58,21 @@ jobs:
         id: package
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          FOURPART_VERSION="${VERSION}.0"
           mkdir -p release
           cp bin/Release/net9.0/JellyfinDiagnostics.dll release/
-          cp meta.json release/
+
+          # Patch meta.json so the version inside the zip matches the tag
+          python3 <<PYEOF
+          import json
+          with open('meta.json', 'r') as f:
+              m = json.load(f)
+          m['versions'][0]['version'] = "${FOURPART_VERSION}"
+          m['versions'][0]['timestamp'] = "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          with open('release/meta.json', 'w') as f:
+              json.dump(m, f, indent=2)
+          PYEOF
+
           cd release
           zip -r "jellyfin-plugin-diagnostics_${VERSION}.zip" JellyfinDiagnostics.dll meta.json
           CHECKSUM=$(md5sum "jellyfin-plugin-diagnostics_${VERSION}.zip" | cut -d' ' -f1)
