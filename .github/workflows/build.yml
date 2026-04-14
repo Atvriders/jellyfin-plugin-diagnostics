@@ -75,38 +75,45 @@ jobs:
             release/jellyfin-plugin-diagnostics_${{ steps.package.outputs.version }}.zip
             release/JellyfinDiagnostics.dll
 
-      - name: Update manifest.json
+      - name: Checkout master for manifest commit
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          path: master-checkout
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update and commit manifest.json
+        working-directory: master-checkout
         env:
           VERSION: ${{ steps.package.outputs.version }}
           CHECKSUM: ${{ steps.package.outputs.checksum }}
           ZIPNAME: ${{ steps.package.outputs.zipname }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          SOURCE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/${ZIPNAME}"
-          CHANGELOG=$(gh release view "v${VERSION}" --json body -q .body 2>/dev/null || echo "See release notes")
+          export TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          export SOURCE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/${ZIPNAME}"
+          export CHANGELOG=$(gh release view "v${VERSION}" --json body -q .body 2>/dev/null || echo "See release notes")
 
-          python3 <<PYEOF
+          python3 <<'PYEOF'
           import json, os
           with open('manifest.json', 'r') as f:
               data = json.load(f)
           plugin = data[0] if isinstance(data, list) else data
           new_version = {
               "version": os.environ['VERSION'] + ".0",
-              "changelog": """$CHANGELOG""",
+              "changelog": os.environ.get('CHANGELOG', 'See release notes'),
               "targetAbi": "10.11.0.0",
-              "sourceUrl": os.environ.get('SOURCE_URL', ''),
+              "sourceUrl": os.environ['SOURCE_URL'],
               "checksum": os.environ['CHECKSUM'],
-              "timestamp": """$TIMESTAMP"""
+              "timestamp": os.environ['TIMESTAMP']
           }
           plugin['versions'] = [new_version] + [v for v in plugin.get('versions', []) if v.get('version') != new_version['version']]
           with open('manifest.json', 'w') as f:
               json.dump([plugin] if isinstance(data, list) else plugin, f, indent=2)
           PYEOF
 
-      - name: Commit manifest update
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add manifest.json
-          git diff --cached --quiet || git commit -m "chore: update manifest for v${{ steps.package.outputs.version }}"
-          git push origin HEAD:master
+          git diff --cached --quiet || git commit -m "chore: update manifest for v${VERSION}"
+          git push origin master

@@ -10,19 +10,11 @@
     "versions": [
       {
         "version": "1.0.0.0",
-<<<<<<< Updated upstream
-        "changelog": "See release notes",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "",
-        "checksum": "94383c654182d7426ca09444ea10276b",
-        "timestamp": "2026-04-14T19:31:31Z"
-=======
         "changelog": "Initial release. Jellyfin 10.11.x / .NET 9",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/Atvriders/jellyfin-plugin-diagnostics/releases/download/v1.0.0/jellyfin-plugin-diagnostics_1.0.0.zip",
         "checksum": "994b8024e9e956300aaaa06e21b6dc08",
         "timestamp": "2026-04-14T19:35:35Z"
->>>>>>> Stashed changes
       }
     ]
   }
