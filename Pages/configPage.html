@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Jellyfin Diagnostics Settings</title>
+</head>
+<body>
+    <div id="JellyfinDiagnosticsConfigPage"
+         data-role="page"
+         class="page type-interior pluginConfigurationPage"
+         data-require="emby-input,emby-button,emby-checkbox,emby-select">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="JellyfinDiagnosticsConfigForm">
+                    <div class="sectionTitleContainer flex align-items-center">
+                        <h2 class="sectionTitle">Jellyfin Diagnostics Settings</h2>
+                        <a is="emby-linkbutton"
+                           rel="noopener noreferrer"
+                           class="raised button-alt headerHelpButton"
+                           target="_blank"
+                           href="https://github.com/Atvriders/jellyfin-plugin-diagnostics#readme">
+                            Help
+                        </a>
+                    </div>
+
+                    <p style="color:#aaa;max-width:720px">
+                        Configure the diagnostics plugin. All settings are read-only unless you change them here.
+                        The <strong>Diagnostics</strong> menu entry in the admin side menu is where you actually run
+                        scans and view reports.
+                    </p>
+
+                    <div class="verticalSection">
+                        <h3 class="checkboxListLabel">AI Integration (optional)</h3>
+                        <p style="color:#aaa;max-width:720px;font-size:13px">
+                            When enabled, you can send a <strong>sanitized</strong> diagnostics report to any
+                            OpenAI-compatible chat completions endpoint (OpenAI, OpenRouter, local Ollama, LM Studio).
+                            All file paths, IPs, MAC addresses, and usernames are stripped before transmission.
+                            <strong>Off by default. No network calls happen unless you click "Analyze with AI" in the dashboard.</strong>
+                        </p>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" id="EnableAiIntegration" />
+                                <span>Enable AI integration</span>
+                            </label>
+                            <div class="fieldDescription checkboxFieldDescription">
+                                Adds an "Analyze with AI" button to the Diagnostics dashboard.
+                            </div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="url" id="AiEndpointUrl" label="AI endpoint URL" />
+                            <div class="fieldDescription">
+                                Full URL to the chat completions endpoint. Examples:<br>
+                                <code>https://api.openai.com/v1/chat/completions</code><br>
+                                <code>https://openrouter.ai/api/v1/chat/completions</code><br>
+                                <code>http://192.168.1.x:11434/v1/chat/completions</code> (local Ollama)
+                            </div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="password" id="AiApiKey" label="AI API key" />
+                            <div class="fieldDescription">
+                                Sent as <code>Authorization: Bearer &lt;key&gt;</code>. Leave blank if your endpoint
+                                doesn't require auth (e.g., local Ollama).
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h3 class="checkboxListLabel">Log Analysis</h3>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" min="100" max="100000" step="100"
+                                   id="LogLinesToScan" label="Log lines to scan per checker" />
+                            <div class="fieldDescription">
+                                How many recent log lines each checker scans for error patterns.
+                                Higher values find more historical errors but slow down the scan.
+                                Default: 5000.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block">
+                            <span>Save</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+            (function () {
+                var JellyfinDiagnosticsPluginId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+                function loadConfig(page) {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(JellyfinDiagnosticsPluginId).then(function (config) {
+                        page.querySelector('#EnableAiIntegration').checked = !!config.EnableAiIntegration;
+                        page.querySelector('#AiEndpointUrl').value = config.AiEndpointUrl || '';
+                        page.querySelector('#AiApiKey').value = config.AiApiKey || '';
+                        page.querySelector('#LogLinesToScan').value = config.LogLinesToScan || 5000;
+                        Dashboard.hideLoadingMsg();
+                    });
+                }
+
+                function saveConfig(page) {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(JellyfinDiagnosticsPluginId).then(function (config) {
+                        config.EnableAiIntegration = page.querySelector('#EnableAiIntegration').checked;
+                        config.AiEndpointUrl = page.querySelector('#AiEndpointUrl').value || '';
+                        config.AiApiKey = page.querySelector('#AiApiKey').value || '';
+                        var linesRaw = parseInt(page.querySelector('#LogLinesToScan').value, 10);
+                        config.LogLinesToScan = isNaN(linesRaw) ? 5000 : linesRaw;
+
+                        ApiClient.updatePluginConfiguration(JellyfinDiagnosticsPluginId, config).then(function (result) {
+                            Dashboard.processPluginConfigurationUpdateResult(result);
+                        });
+                    });
+                }
+
+                var page = document.querySelector('#JellyfinDiagnosticsConfigPage');
+
+                page.addEventListener('pageshow', function () {
+                    loadConfig(page);
+                });
+
+                page.querySelector('#JellyfinDiagnosticsConfigForm').addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    saveConfig(page);
+                    return false;
+                });
+            })();
+        </script>
+    </div>
+</body>
+</html>

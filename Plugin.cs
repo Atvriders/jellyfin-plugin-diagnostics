@@ -26,14 +26,25 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     public IEnumerable<PluginPageInfo> GetPages()
     {
+        var prefix = GetType().Namespace;
         return new[]
         {
+            // Settings page: opened when admin clicks "Settings" next to the plugin
+            // in Dashboard -> Plugins. Name must match the plugin class name.
             new PluginPageInfo
             {
                 Name = "JellyfinDiagnostics",
-                EmbeddedResourcePath = GetType().Namespace + ".Pages.diagnosticsPage.html",
+                EmbeddedResourcePath = prefix + ".Pages.configPage.html"
+            },
+            // Dashboard page: shown in the admin side menu as "Diagnostics".
+            new PluginPageInfo
+            {
+                Name = "JellyfinDiagnosticsDashboard",
+                EmbeddedResourcePath = prefix + ".Pages.diagnosticsPage.html",
                 EnableInMainMenu = true,
-                DisplayName = "Diagnostics"
+                DisplayName = "Diagnostics",
+                MenuSection = "server",
+                MenuIcon = "troubleshoot"
             }
         };
     }

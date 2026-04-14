@@ -44,7 +44,7 @@ This plugin ships with a plugin repository manifest that Jellyfin can read. No m
 4. Go to the **Catalog** tab — "Jellyfin Diagnostics" now appears under the *General* category
 5. Click the plugin → **Install** → wait for confirmation
 6. Restart the Jellyfin container
-7. Go to **Dashboard → Plugins** to verify status is *Active*; a new **Diagnostics** entry appears in the admin menu
+7. Go to **Dashboard → Plugins** to verify status is *Active*. You can click the plugin to configure settings, and a new **Diagnostics** entry appears in the admin side menu under Server for running scans (see [Plugin UI — two surfaces](#plugin-ui--two-surfaces) below)
 
 Updates through this path happen in one click as new versions are published to the repository.
 
@@ -93,6 +93,33 @@ If nothing appears:
 - Verify the DLL and `meta.json` are both present and owned by `99:100`
 - Verify the plugin folder name includes the version suffix (`_1.0.0.0`)
 - Check that Jellyfin is actually version 10.11.x (plugin ABI mismatch will prevent loading)
+
+---
+
+## Plugin UI — two surfaces
+
+Once the plugin is installed, Jellyfin exposes it in two places:
+
+### 1. Settings page — `Dashboard → Plugins → Jellyfin Diagnostics → [...] → Settings`
+
+A form with four fields:
+- **Enable AI integration** (checkbox, default OFF) — master switch for the AI feature
+- **AI endpoint URL** — your OpenAI-compatible chat completions URL (OpenAI, OpenRouter, local Ollama, etc.)
+- **AI API key** — sent as `Authorization: Bearer <key>`, masked in the UI
+- **Log lines to scan per checker** — how many recent log lines each checker analyzes (default 5000)
+
+Click **Save** to persist. No scans run from this page.
+
+### 2. Diagnostics dashboard — `Dashboard → Diagnostics` (admin side menu)
+
+The actual working view:
+- **Run Diagnostics** button — triggers a fresh scan across all four checkers
+- **Summary bar** — count of Critical / Warning / Info findings
+- **Collapsible category cards** — grouped by Hardware Acceleration / Docker Volumes / Permissions / Networking, each listing findings with severity icon, explanation, Unraid context, and numbered fix steps
+- **Export Report** button — downloads the full report as JSON
+- **Analyze with AI** button — only visible when AI integration is enabled in Settings; sends sanitized report to your configured endpoint and shows the response in a modal
+
+The dashboard is read-only — nothing on it can change Jellyfin configuration. Fix steps are presented as instructions for you to apply manually.
 
 ---
 

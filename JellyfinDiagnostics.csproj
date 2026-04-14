@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Pages/diagnosticsPage.html" />
+    <EmbeddedResource Include="Pages/configPage.html" />
   </ItemGroup>
 
 </Project>
