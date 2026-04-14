@@ -47,7 +47,10 @@ public class SecurityChecker : IDiagnosticChecker
             var users = _userManager.Users;
             foreach (var user in users)
             {
-                if (!user.HasPermission(Jellyfin.Data.Enums.PermissionKind.IsAdministrator))
+                // Reflect on the user to find an admin flag; property location varies
+                // between Jellyfin versions (Policy.IsAdministrator, direct HasPermission, etc.).
+                bool isAdmin = IsUserAdmin(user);
+                if (!isAdmin)
                 {
                     continue;
                 }
@@ -78,6 +81,53 @@ public class SecurityChecker : IDiagnosticChecker
         {
             _logger.LogWarning(ex, "Failed to check admin users");
         }
+    }
+
+    private static bool IsUserAdmin(object user)
+    {
+        try
+        {
+            var type = user.GetType();
+
+            // Try Policy.IsAdministrator (older Jellyfin API shape)
+            var policyProp = type.GetProperty("Policy");
+            if (policyProp != null)
+            {
+                var policy = policyProp.GetValue(user);
+                if (policy != null)
+                {
+                    var isAdminProp = policy.GetType().GetProperty("IsAdministrator");
+                    if (isAdminProp != null)
+                    {
+                        return (bool)(isAdminProp.GetValue(policy) ?? false);
+                    }
+                }
+            }
+
+            // Try HasPermission(PermissionKind.IsAdministrator) via reflection
+            var hasPermMethod = type.GetMethod("HasPermission", new[] { typeof(int) })
+                              ?? type.GetMethods()
+                                     .FirstOrDefault(m => m.Name == "HasPermission" && m.GetParameters().Length == 1);
+            if (hasPermMethod != null)
+            {
+                var paramType = hasPermMethod.GetParameters()[0].ParameterType;
+                if (paramType.IsEnum)
+                {
+                    foreach (var v in Enum.GetValues(paramType))
+                    {
+                        if (v.ToString() == "IsAdministrator")
+                        {
+                            return (bool)(hasPermMethod.Invoke(user, new[] { v }) ?? false);
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Best-effort
+        }
+        return false;
     }
 
     private void CheckRemoteAccessSafety(List<DiagnosticResult> results)

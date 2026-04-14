@@ -39,29 +39,31 @@ public class PluginHealthChecker : IDiagnosticChecker
             {
                 try
                 {
-                    var status = plugin.Manifest?.Status;
-                    switch (status)
+                    // Use reflection for PluginStatus — the enum's namespace varies between
+                    // Jellyfin 10.10.x, 10.11.x and possibly 10.12.x. String compare is stable.
+                    var statusString = plugin.Manifest?.Status.ToString() ?? "Unknown";
+                    switch (statusString)
                     {
-                        case MediaBrowser.Common.Plugins.PluginStatus.Active:
+                        case "Active":
                             active++;
                             break;
-                        case MediaBrowser.Common.Plugins.PluginStatus.Deleted:
+                        case "Deleted":
                             deleted++;
                             badStatusPlugins.Add(plugin.Name + " (Deleted)");
                             break;
-                        case MediaBrowser.Common.Plugins.PluginStatus.NotSupported:
+                        case "NotSupported":
                             notSupported++;
                             badStatusPlugins.Add(plugin.Name + " (NotSupported)");
                             break;
-                        case MediaBrowser.Common.Plugins.PluginStatus.Malfunctioned:
+                        case "Malfunctioned":
                             malfunctioned++;
                             badStatusPlugins.Add(plugin.Name + " (Malfunctioned)");
                             break;
-                        case MediaBrowser.Common.Plugins.PluginStatus.Restart:
+                        case "Restart":
                             restart++;
                             badStatusPlugins.Add(plugin.Name + " (awaiting Restart)");
                             break;
-                        case MediaBrowser.Common.Plugins.PluginStatus.Disabled:
+                        case "Disabled":
                             disabled++;
                             break;
                     }
