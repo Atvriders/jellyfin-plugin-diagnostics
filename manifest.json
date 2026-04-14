@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.0.2.0",
+        "changelog": "Fixes plugin not appearing in Jellyfin catalog after adding the repository. Empty imageUrl field in the manifest was causing silent rejection. Also fixes meta.json inside the installed zip to match the tag version.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Atvriders/jellyfin-plugin-diagnostics/releases/download/v1.0.2/jellyfin-plugin-diagnostics_1.0.2.zip",
+        "checksum": "8743cc1fb86494e32b5b290753ad0d14",
+        "timestamp": "2026-04-14T19:50:44Z"
+      },
+      {
         "version": "1.0.1.0",
         "changelog": "Adds a proper Settings page with form fields for AI integration toggle, endpoint URL, API key, and log lines to scan. Clicking Settings next to the plugin in Dashboard -> Plugins now shows a working configuration form. The separate Diagnostics entry in the admin side menu continues to serve the dashboard view for running scans.",
         "targetAbi": "10.11.0.0",
