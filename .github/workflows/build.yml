@@ -51,8 +51,10 @@ jobs:
 
       - name: Build Release DLL
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          FOURPART_VERSION="${VERSION}.0"
           dotnet restore
-          dotnet build -c Release --no-restore
+          dotnet build -c Release --no-restore -p:Version=${FOURPART_VERSION}
 
       - name: Package plugin zip
         id: package
