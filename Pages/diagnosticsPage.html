@@ -49,6 +49,25 @@
                     #JellyfinDiagnosticsDashboardPage .diag-modal { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80vh; overflow-y: auto; padding: 24px; }
                     #JellyfinDiagnosticsDashboardPage .diag-modal h3 { margin: 0 0 16px 0; }
                     #JellyfinDiagnosticsDashboardPage .diag-modal pre { background: #111; padding: 16px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; font-size: 13px; line-height: 1.5; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-section { margin-top: 32px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-body { padding: 0; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-toolbar { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid #2a2a2a; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-content { overflow-x: auto; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-table th { text-align: left; padding: 10px 14px; background: #1a1a1a; border-top: 1px solid #2a2a2a; border-bottom: 1px solid #333; color: #888; font-size: 12px; font-weight: 600; text-transform: uppercase; white-space: nowrap; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-table td { padding: 10px 14px; border-top: 1px solid #2a2a2a; color: #ccc; vertical-align: middle; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-table tbody tr:hover { background: #1d1d1d; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-time { white-space: nowrap; color: #aaa; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-action { font-weight: 600; color: #00a4dc; white-space: nowrap; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-counts { white-space: nowrap; letter-spacing: 1px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-failed { color: #f44336; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-actions-cell { text-align: right; white-space: nowrap; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-view-btn { background: none; border: 1px solid #00a4dc; color: #00a4dc; border-radius: 4px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-view-btn:hover { background: rgba(0, 164, 220, 0.15); }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-empty { padding: 24px 18px; text-align: center; color: #888; border-top: 1px solid #2a2a2a; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-error { padding: 24px 18px; text-align: center; color: #f44336; border-top: 1px solid #2a2a2a; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-message { display: none; padding: 12px 18px; color: #f44336; background: rgba(244, 67, 54, 0.08); border-top: 1px solid #2a2a2a; font-size: 13px; }
+                    #JellyfinDiagnosticsDashboardPage .diag-history-banner { margin-bottom: 16px; padding: 10px 14px; border-radius: 6px; background: rgba(0, 164, 220, 0.12); border: 1px solid rgba(0, 164, 220, 0.3); color: #00a4dc; font-size: 13px; }
                 </style>
 
                 <div class="diag-header">
@@ -79,6 +98,24 @@
                     </div>
                 </div>
 
+                <div class="diag-history-section">
+                    <div class="diag-category-section">
+                        <div class="diag-category-header diag-history-header">
+                            <h2>History</h2>
+                            <span class="diag-category-toggle">&#9660;</span>
+                        </div>
+                        <div class="diag-category-body diag-history-body">
+                            <div class="diag-history-message"></div>
+                            <div class="diag-history-content"></div>
+                            <div class="diag-history-toolbar">
+                                <button is="emby-button" type="button" class="raised diag-history-clear-btn">
+                                    <span>Clear History</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="diag-modal-overlay">
                     <div class="diag-modal">
                         <h3>AI Analysis</h3>
@@ -95,6 +132,12 @@
             (function () {
                 var page = document.querySelector('#JellyfinDiagnosticsDashboardPage');
                 var currentReport = null;
+
+                // True while the pane is showing a report loaded from History rather than a
+                // live scan. The AI endpoint always analyses the server's CURRENT report, so
+                // offering "Analyze with AI" here would send something other than what is on
+                // screen. The button is hidden until the next live run.
+                var viewingHistoricalReport = false;
 
                 function clearNode(node) {
                     while (node.firstChild) {
@@ -115,7 +158,167 @@
                     return '\u2705';
                 }
 
-                function getSev(f) { return f.Severity !== undefined ? f.Severity : f.severity; }
+                // Jellyfin's MVC JSON pipeline serializes enums BY NAME
+                // ({"Severity":"Critical"}), while a stock web-defaults host would send the
+                // number. Normalise both to the numeric form the comparisons below use -
+                // otherwise every severity test is false and a broken server renders all-green.
+                function getSev(f) {
+                    var s = f.Severity !== undefined && f.Severity !== null ? f.Severity : f.severity;
+                    if (typeof s === 'string') {
+                        var name = s.toLowerCase();
+                        if (name === 'critical') return 2;
+                        if (name === 'warning') return 1;
+                        if (name === 'info') return 0;
+                        return 0;
+                    }
+                    return s;
+                }
+
+                function pick(obj, pascal, camel) {
+                    return obj[pascal] !== undefined && obj[pascal] !== null ? obj[pascal] : obj[camel];
+                }
+
+                function actionLabel(action) {
+                    if (action === 0 || action === 'RunDiagnostics') return 'Run Diagnostics';
+                    if (action === 1 || action === 'ExportReport') return 'Export Report';
+                    if (action === 2 || action === 'AnalyzeWithAi') return 'Analyze with AI';
+                    return 'Unknown';
+                }
+
+                function isFailed(outcome) {
+                    return outcome === 1 || outcome === 'Failed';
+                }
+
+                function historyCounts(entry) {
+                    var critical = pick(entry, 'CriticalCount', 'criticalCount');
+                    var warning = pick(entry, 'WarningCount', 'warningCount');
+                    var info = pick(entry, 'InfoCount', 'infoCount');
+                    if (critical === undefined || critical === null) return null;
+                    return '\u274C ' + critical + '  \u26A0\uFE0F ' + (warning || 0) + '  \u2705 ' + (info || 0);
+                }
+
+                function resultCell(entry) {
+                    var cell = el('td');
+                    if (isFailed(pick(entry, 'Outcome', 'outcome'))) {
+                        var message = pick(entry, 'ErrorMessage', 'errorMessage');
+                        cell.appendChild(el('span', 'diag-history-failed', '\u274C ' + (message || 'Failed')));
+                        return cell;
+                    }
+
+                    var counts = historyCounts(entry);
+                    if (counts) {
+                        cell.appendChild(el('span', 'diag-history-counts', counts));
+                    } else {
+                        cell.appendChild(el('span', null, '\u2705'));
+                    }
+
+                    return cell;
+                }
+
+                function renderHistory(entries) {
+                    var host = page.querySelector('.diag-history-content');
+                    clearNode(host);
+
+                    if (!entries.length) {
+                        host.appendChild(el('div', 'diag-history-empty', 'No button presses recorded yet.'));
+                        return;
+                    }
+
+                    var table = el('table', 'diag-history-table');
+                    var thead = el('thead');
+                    var headRow = el('tr');
+                    ['Time', 'Action', 'User', 'Result', ''].forEach(function (label) {
+                        headRow.appendChild(el('th', null, label));
+                    });
+                    thead.appendChild(headRow);
+                    table.appendChild(thead);
+
+                    var tbody = el('tbody');
+                    entries.forEach(function (entry) {
+                        var row = el('tr');
+
+                        var stamp = pick(entry, 'Timestamp', 'timestamp');
+                        var when = stamp ? new Date(stamp).toLocaleString() : '';
+                        row.appendChild(el('td', 'diag-history-time', when));
+                        row.appendChild(el('td', 'diag-history-action', actionLabel(pick(entry, 'Action', 'action'))));
+                        row.appendChild(el('td', null, pick(entry, 'UserName', 'userName') || 'unknown'));
+                        row.appendChild(resultCell(entry));
+
+                        var actions = el('td', 'diag-history-actions-cell');
+                        var id = pick(entry, 'Id', 'id');
+                        if (pick(entry, 'HasReport', 'hasReport') && id) {
+                            var viewBtn = el('button', 'diag-history-view-btn', 'View');
+                            viewBtn.type = 'button';
+                            viewBtn.addEventListener('click', function () {
+                                viewHistoryReport(id);
+                            });
+                            actions.appendChild(viewBtn);
+                        }
+
+                        row.appendChild(actions);
+                        tbody.appendChild(row);
+                    });
+
+                    table.appendChild(tbody);
+                    host.appendChild(table);
+                }
+
+                function loadHistory() {
+                    var host = page.querySelector('.diag-history-content');
+                    ApiClient.ajax({
+                        type: 'GET',
+                        url: ApiClient.getUrl('Diagnostics/History', { startIndex: 0, limit: 50 }),
+                        dataType: 'json'
+                    }).then(function (entries) {
+                        renderHistory(entries || []);
+                    }).catch(function () {
+                        clearNode(host);
+                        host.appendChild(el('div', 'diag-history-error', 'Could not load history.'));
+                    });
+                }
+
+                // A per-row failure is reported HERE, never by wiping .diag-history-content -
+                // one unreadable snapshot must not destroy the 50 rows the admin is reading.
+                function historyMessage(text) {
+                    var msg = page.querySelector('.diag-history-message');
+                    msg.textContent = text || '';
+                    msg.style.display = text ? 'block' : 'none';
+                }
+
+                function viewHistoryReport(id) {
+                    ApiClient.ajax({
+                        type: 'GET',
+                        url: ApiClient.getUrl('Diagnostics/History/' + id + '/Report'),
+                        dataType: 'json'
+                    }).then(function (report) {
+                        historyMessage('');
+                        currentReport = report;
+                        viewingHistoricalReport = true;
+                        renderReport(report);
+                        page.querySelector('.diag-export-btn').disabled = false;
+                        updateAiButtonVisibility();
+                        window.scrollTo(0, 0);
+                    }).catch(function () {
+                        // Keep the table: refresh it so a row for a report that no longer
+                        // exists (cleared in another tab) disappears on its own.
+                        historyMessage('Could not load that report. It may have been cleared.');
+                        loadHistory();
+                    });
+                }
+
+                function clearHistory() {
+                    if (!confirm('Clear the entire diagnostics button press history? This cannot be undone.')) return;
+
+                    ApiClient.ajax({
+                        type: 'DELETE',
+                        url: ApiClient.getUrl('Diagnostics/History')
+                    }).then(function () {
+                        historyMessage('');
+                        loadHistory();
+                    }).catch(function () {
+                        historyMessage('Could not clear history.');
+                    });
+                }
 
                 function runDiagnostics() {
                     var runBtn = page.querySelector('.diag-run-btn');
@@ -136,6 +339,7 @@
                         dataType: 'json'
                     }).then(function (report) {
                         currentReport = report;
+                        viewingHistoricalReport = false;
                         renderReport(report);
                         page.querySelector('.diag-export-btn').disabled = false;
                         updateAiButtonVisibility();
@@ -149,12 +353,18 @@
                     }).finally(function () {
                         runBtn.disabled = false;
                         runBtnSpan.textContent = 'Run Diagnostics';
+                        loadHistory();
                     });
                 }
 
                 function renderReport(report) {
                     var content = page.querySelector('.diag-content');
                     clearNode(content);
+
+                    if (viewingHistoricalReport) {
+                        content.appendChild(el('div', 'diag-history-banner',
+                            'Viewing a saved report from history. Press Run Diagnostics for a live scan (AI analysis is only offered for live reports).'));
+                    }
 
                     var meta = el('div', 'diag-report-meta');
                     meta.appendChild(el('span', null, 'Scanned: ' + new Date(report.Timestamp || report.timestamp).toLocaleString()));
@@ -244,13 +454,34 @@
                     a.download = 'jellyfin-diagnostics-' + new Date().toISOString().slice(0, 10) + '.json';
                     a.click();
                     URL.revokeObjectURL(url);
+
+                    // Export is a client-only action, so the press is reported to the
+                    // server explicitly. Fire-and-forget: a history failure must never
+                    // break the download the user just got.
+                    ApiClient.ajax({
+                        type: 'POST',
+                        url: ApiClient.getUrl('Diagnostics/History/Record'),
+                        data: JSON.stringify({ Action: 'ExportReport' }),
+                        contentType: 'application/json',
+                        dataType: 'json'
+                    }).then(loadHistory).catch(function () { /* history is best-effort */ });
                 }
 
                 function updateAiButtonVisibility() {
                     var pluginId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+                    var btn = page.querySelector('.diag-ai-btn');
+
+                    // POST Diagnostics/Ai analyses the server's own last report (or runs a
+                    // fresh scan when it has none) - never the historical snapshot on screen.
+                    // Rather than quietly analysing a different report than the one being
+                    // read, the button is unavailable until the next live run.
+                    if (viewingHistoricalReport) {
+                        btn.style.display = 'none';
+                        return;
+                    }
+
                     ApiClient.getPluginConfiguration(pluginId).then(function (config) {
-                        var btn = page.querySelector('.diag-ai-btn');
-                        btn.style.display = config.EnableAiIntegration ? 'inline-block' : 'none';
+                        btn.style.display = (config.EnableAiIntegration && !viewingHistoricalReport) ? 'inline-block' : 'none';
                     });
                 }
 
@@ -268,11 +499,15 @@
                         responseEl.textContent = typeof data.response === 'string' ? data.response : JSON.stringify(data.response || data, null, 2);
                     }).catch(function (err) {
                         responseEl.textContent = 'Error: ' + (err && err.message ? err.message : 'Request failed');
+                    }).finally(function () {
+                        // The server records both the success and the failure of an AI press.
+                        loadHistory();
                     });
                 }
 
                 page.addEventListener('pageshow', function () {
                     updateAiButtonVisibility();
+                    loadHistory();
                 });
 
                 page.querySelector('.diag-run-btn').addEventListener('click', runDiagnostics);
@@ -280,6 +515,10 @@
                 page.querySelector('.diag-ai-btn').addEventListener('click', sendToAi);
                 page.querySelector('.diag-modal-close').addEventListener('click', function () {
                     page.querySelector('.diag-modal-overlay').classList.remove('visible');
+                });
+                page.querySelector('.diag-history-clear-btn').addEventListener('click', clearHistory);
+                page.querySelector('.diag-history-header').addEventListener('click', function () {
+                    page.querySelector('.diag-history-body').classList.toggle('hidden');
                 });
             })();
         </script>

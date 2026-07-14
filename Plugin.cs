@@ -7,6 +7,7 @@ using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace JellyfinDiagnostics;
 
@@ -57,6 +58,16 @@ public class DiagnosticsPluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<LogAnalyzer>();
         serviceCollection.AddSingleton<DiagnosticsService>();
         serviceCollection.AddSingleton<AiIntegrationService>();
+
+        // HistoryService takes a plain string root (so it stays unit-testable), which
+        // means it needs a factory rather than plain AddSingleton<T>().
+        serviceCollection.AddSingleton<HistoryService>(sp =>
+        {
+            var paths = sp.GetRequiredService<IApplicationPaths>();
+            var logger = sp.GetRequiredService<ILogger<HistoryService>>();
+            var root = Path.Combine(paths.DataPath, "diagnostics-history");
+            return new HistoryService(root, logger);
+        });
 
         serviceCollection.AddSingleton<IDiagnosticChecker, HardwareAccelerationChecker>();
         serviceCollection.AddSingleton<IDiagnosticChecker, VolumePathChecker>();

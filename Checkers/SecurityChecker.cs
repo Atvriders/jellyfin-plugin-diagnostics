@@ -1,4 +1,6 @@
+using System.Collections;
 using JellyfinDiagnostics.Models;
+using JellyfinDiagnostics.Services;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Configuration;
@@ -9,7 +11,6 @@ namespace JellyfinDiagnostics.Checkers;
 
 public class SecurityChecker : IDiagnosticChecker
 {
-    private readonly IServerConfigurationManager _serverConfigManager;
     private readonly IConfigurationManager _configManager;
     private readonly IUserManager _userManager;
     private readonly ILogger<SecurityChecker> _logger;
@@ -18,12 +19,10 @@ public class SecurityChecker : IDiagnosticChecker
     public string Category => "Security";
 
     public SecurityChecker(
-        IServerConfigurationManager serverConfigManager,
         IConfigurationManager configManager,
         IUserManager userManager,
         ILogger<SecurityChecker> logger)
     {
-        _serverConfigManager = serverConfigManager;
         _configManager = configManager;
         _userManager = userManager;
         _logger = logger;
@@ -60,7 +59,7 @@ public class SecurityChecker : IDiagnosticChecker
     {
         try
         {
-            return _userManager.Users?.Count() ?? 0;
+            return UserEnumerator.GetUsers(_userManager).Count;
         }
         catch
         {
@@ -73,17 +72,14 @@ public class SecurityChecker : IDiagnosticChecker
         try
         {
             int n = 0;
-            var users = _userManager.Users;
-            if (users != null)
+            foreach (var u in UserEnumerator.GetUsers(_userManager))
             {
-                foreach (var u in users)
+                if (IsUserAdmin(u))
                 {
-                    if (IsUserAdmin(u))
-                    {
-                        n++;
-                    }
+                    n++;
                 }
             }
+
             return n;
         }
         catch
@@ -96,8 +92,7 @@ public class SecurityChecker : IDiagnosticChecker
     {
         try
         {
-            var users = _userManager.Users;
-            foreach (var user in users)
+            foreach (var user in UserEnumerator.GetUsers(_userManager))
             {
                 // Reflect on the user to find an admin flag; property location varies
                 // between Jellyfin versions (Policy.IsAdministrator, direct HasPermission, etc.).
@@ -107,7 +102,9 @@ public class SecurityChecker : IDiagnosticChecker
                     continue;
                 }
 
-                var name = user.Username ?? string.Empty;
+                // The element type is object (user enumeration is resolved at runtime to
+                // span 10.11.0-10.11.11), so the username is read reflectively too.
+                var name = user.GetType().GetProperty("Username")?.GetValue(user) as string ?? string.Empty;
                 var nameLower = name.ToLowerInvariant();
                 if (nameLower == "admin" || nameLower == "administrator" || nameLower == "jellyfin" || nameLower == "root")
                 {
@@ -135,7 +132,7 @@ public class SecurityChecker : IDiagnosticChecker
         }
     }
 
-    private static bool IsUserAdmin(object user)
+    internal static bool IsUserAdmin(object user)
     {
         try
         {
@@ -156,7 +153,7 @@ public class SecurityChecker : IDiagnosticChecker
                 }
             }
 
-            // Try HasPermission(PermissionKind.IsAdministrator) via reflection
+            // Try an instance HasPermission(PermissionKind.IsAdministrator) via reflection
             var hasPermMethod = type.GetMethod("HasPermission", new[] { typeof(int) })
                               ?? type.GetMethods()
                                      .FirstOrDefault(m => m.Name == "HasPermission" && m.GetParameters().Length == 1);
@@ -172,6 +169,30 @@ public class SecurityChecker : IDiagnosticChecker
                             return (bool)(hasPermMethod.Invoke(user, new[] { v }) ?? false);
                         }
                     }
+                }
+            }
+
+            // The shape every 10.11.x server actually has. The user entity carries neither
+            // a Policy property nor an instance HasPermission (HasPermission is a static
+            // extension on Jellyfin.Data.UserEntityExtensions, which Type.GetMethod cannot
+            // see), so admin state is read straight off the Permissions collection.
+            if (type.GetProperty("Permissions")?.GetValue(user) is IEnumerable permissions)
+            {
+                foreach (var permission in permissions)
+                {
+                    if (permission == null)
+                    {
+                        continue;
+                    }
+
+                    var permissionType = permission.GetType();
+                    var kind = permissionType.GetProperty("Kind")?.GetValue(permission);
+                    if (kind?.ToString() != "IsAdministrator")
+                    {
+                        continue;
+                    }
+
+                    return (bool)(permissionType.GetProperty("Value")?.GetValue(permission) ?? false);
                 }
             }
         }
@@ -198,19 +219,10 @@ public class SecurityChecker : IDiagnosticChecker
                 return;
             }
 
-            var serverConfig = _serverConfigManager.Configuration;
-
-            bool remoteAccess = false;
-            try
-            {
-                var type = serverConfig.GetType();
-                var prop = type.GetProperty("EnableRemoteAccess");
-                if (prop != null)
-                {
-                    remoteAccess = (bool)(prop.GetValue(serverConfig) ?? false);
-                }
-            }
-            catch { }
+            // EnableRemoteAccess lives on NetworkConfiguration, not ServerConfiguration, in
+            // every supported release (10.11.0-10.11.11). Reading it off ServerConfiguration
+            // silently yielded false forever, so this warning could never fire.
+            bool remoteAccess = netConfig.EnableRemoteAccess;
 
             if (remoteAccess && !netConfig.EnableHttps)
             {

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using JellyfinDiagnostics.Models;
 using JellyfinDiagnostics.Services;
 using MediaBrowser.Common.Configuration;
@@ -20,6 +19,11 @@ public class DatabaseHealthChecker : IDiagnosticChecker
     private const long WarnWalBytes = 64L * 1024 * 1024;          // 64 MB
     private const long CritWalBytes = 512L * 1024 * 1024;         // 512 MB
 
+    // Hard cap on the sqlite3 integrity check. quick_check on a multi-GB database sitting
+    // on an Unraid spinning array runs for minutes; the dashboard request must not.
+    private const int IntegrityTimeoutMs = 10000;
+    private const int WhichTimeoutMs = 2000;
+
     public DatabaseHealthChecker(
         IApplicationPaths appPaths,
         LogAnalyzer logAnalyzer,
@@ -30,7 +34,7 @@ public class DatabaseHealthChecker : IDiagnosticChecker
         _logger = logger;
     }
 
-    public Task<List<DiagnosticResult>> RunAsync(CancellationToken cancellationToken)
+    public async Task<List<DiagnosticResult>> RunAsync(CancellationToken cancellationToken)
     {
         var results = new List<DiagnosticResult>();
 
@@ -47,13 +51,13 @@ public class DatabaseHealthChecker : IDiagnosticChecker
 
             CheckDatabaseSize(results, name, path);
             CheckWalFile(results, name, path);
-            CheckDatabaseIntegrity(results, name, path, cancellationToken);
+            await CheckDatabaseIntegrityAsync(results, name, path, cancellationToken).ConfigureAwait(false);
         }
 
         CheckDatabaseOnNetworkShare(results, dataPath);
         CheckDatabaseLogErrors(results);
 
-        return Task.FromResult(results);
+        return results;
     }
 
     private void CheckDatabaseSize(List<DiagnosticResult> results, string name, string path)
@@ -178,12 +182,12 @@ public class DatabaseHealthChecker : IDiagnosticChecker
         }
     }
 
-    private void CheckDatabaseIntegrity(List<DiagnosticResult> results, string name, string dbPath, CancellationToken cancellationToken)
+    private async Task CheckDatabaseIntegrityAsync(List<DiagnosticResult> results, string name, string dbPath, CancellationToken cancellationToken)
     {
         // Uses the sqlite3 CLI if it's available inside the Jellyfin container.
         // Avoids a hard dependency on Microsoft.Data.Sqlite which isn't always
         // accessible to plugin assemblies at runtime.
-        var sqliteBinary = FindSqliteBinary();
+        var sqliteBinary = await FindSqliteBinaryAsync(cancellationToken).ConfigureAwait(false);
         if (sqliteBinary == null)
         {
             return;
@@ -191,31 +195,29 @@ public class DatabaseHealthChecker : IDiagnosticChecker
 
         try
         {
-            using var process = new Process();
-            process.StartInfo = new ProcessStartInfo
+            // ProcessRunner enforces the timeout for real: it drains stdout/stderr
+            // concurrently instead of blocking on ReadToEnd() until the child exits.
+            var run = await ProcessRunner.RunAsync(
+                sqliteBinary,
+                new[] { dbPath, "PRAGMA quick_check;" },
+                IntegrityTimeoutMs,
+                cancellationToken).ConfigureAwait(false);
+
+            if (run == null)
             {
-                FileName = sqliteBinary,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            process.StartInfo.ArgumentList.Add(dbPath);
-            process.StartInfo.ArgumentList.Add("PRAGMA quick_check;");
-            process.Start();
-            var stdout = process.StandardOutput.ReadToEnd();
-            if (!process.WaitForExit(10000))
-            {
-                try { process.Kill(true); } catch { }
+                _logger.LogWarning(
+                    "sqlite3 quick_check on {Name} exceeded {Timeout} ms and was killed; skipping the integrity check",
+                    name,
+                    IntegrityTimeoutMs);
                 return;
             }
 
-            if (process.ExitCode != 0)
+            if (run.ExitCode != 0)
             {
                 return;
             }
 
-            var trimmed = stdout.Trim();
+            var trimmed = run.StandardOutput.Trim();
             if (trimmed.Equals("ok", StringComparison.OrdinalIgnoreCase))
             {
                 results.Add(new DiagnosticResult
@@ -258,7 +260,7 @@ public class DatabaseHealthChecker : IDiagnosticChecker
         }
     }
 
-    private static string? FindSqliteBinary()
+    private async Task<string?> FindSqliteBinaryAsync(CancellationToken cancellationToken)
     {
         foreach (var candidate in new[] { "/usr/bin/sqlite3", "/usr/local/bin/sqlite3" })
         {
@@ -271,26 +273,27 @@ public class DatabaseHealthChecker : IDiagnosticChecker
         // Try PATH lookup via which
         try
         {
-            using var p = new Process();
-            p.StartInfo = new ProcessStartInfo
+            var run = await ProcessRunner.RunAsync(
+                "which",
+                new[] { "sqlite3" },
+                WhichTimeoutMs,
+                cancellationToken).ConfigureAwait(false);
+
+            if (run == null)
             {
-                FileName = "which",
-                Arguments = "sqlite3",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            p.Start();
-            var output = p.StandardOutput.ReadToEnd().Trim();
-            if (p.WaitForExit(2000) && p.ExitCode == 0 && !string.IsNullOrEmpty(output) && File.Exists(output))
+                return null;
+            }
+
+            var output = run.StandardOutput.Trim();
+            if (run.ExitCode == 0 && !string.IsNullOrEmpty(output) && File.Exists(output))
             {
                 return output;
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // sqlite3 not available
+            // sqlite3 not available (no `which`, exec denied, ...). Integrity check is optional.
+            _logger.LogDebug(ex, "Could not locate the sqlite3 binary");
         }
 
         return null;

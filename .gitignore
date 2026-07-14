@@ -1,6 +1,7 @@
 # Build output
 bin/
 obj/
+[Tt]est[Rr]esults/
 *.dll
 *.pdb
 *.user

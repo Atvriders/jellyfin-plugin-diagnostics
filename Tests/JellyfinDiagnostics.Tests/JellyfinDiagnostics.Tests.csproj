@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- 9.0.11, not the plan's 9.0.0: Jellyfin.Model 10.11.11 requires >= 9.0.11,
+         and a lower pin here is an NU1605 package-downgrade error. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.11" />
+    <!-- Pure-managed JS interpreter: lets the dashboard's own severity/AI-button logic be
+         executed as shipped (extracted straight out of the embedded page) rather than
+         re-implemented in a test. No node/browser dependency in CI. -->
+    <PackageReference Include="Jint" Version="4.12.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../JellyfinDiagnostics.csproj" />
+  </ItemGroup>
+
+</Project>

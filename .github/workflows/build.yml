@@ -26,6 +26,11 @@ jobs:
       - name: Build
         run: dotnet build -c Release --no-restore
 
+      # The test project is not part of the root build (there is deliberately no .sln),
+      # so it restores itself here.
+      - name: Test
+        run: dotnet test Tests/JellyfinDiagnostics.Tests -c Release --verbosity normal
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
